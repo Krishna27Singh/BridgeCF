@@ -1,35 +1,62 @@
-# 🚀 CodeFrontier: Adaptive CP Hint Engine
+# 🌉 BridgeCF: Adaptive Codeforces Hint Engine
 
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org)
-[![C++](https://img.shields.io/badge/C++-11%2B-00599C.svg)](https://isocpp.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+BridgeCF is a high-performance browser extension designed for competitive programmers. Instead of immediately spoiling solutions or searching for generic tags, BridgeCF acts as an automated, personalized tutor. 
 
-CodeFrontier is a high-performance browser extension designed for Codeforces. Instead of spoiling solutions, it acts as an automated, personalized tutor. By analyzing a user's entire submission history, it calculates precise mathematical bottlenecks and utilizes local Small Language Models (SLMs) to generate Socratic, step-by-step hints.
-
-![Extension Demo](https://via.placeholder.com/800x400?text=Insert+a+GIF+of+the+Chrome+Extension+Working+Here)
+By calculating the mathematical gap between your historical Codeforces submissions and a target problem, it routes you to optimal "Bridge Problems" and generates Socratic, step-by-step hints using local AI inference.
 
 ---
 
-## ✨ System Architecture & Key Features
+## 🧰 Tech Stack & Infrastructure
 
-This project abandons standard API wrappers in favor of low-level system optimizations and deterministic graph theory.
-
-* **Deterministic Knowledge Graph (C++):** A custom heterogeneous Directed Acyclic Graph (DAG) that maps user problem history to core mathematical concepts. Executes a multi-pass Bidirectional BFS in **<2ms** to calculate exact knowledge gaps (Set Difference: `Required \ Mastered`).
-* **Zero-Overhead Memory Bridge:** Utilizes Python `ctypes` to map contiguous C-arrays directly into the FastAPI server’s virtual address space, eliminating JSON serialization overhead between the web and logic layers.
-* **Just-In-Time (JIT) Vector Ingestion:** A fallback pipeline using **FAISS** and `SentenceTransformers`. If a user queries an undocumented problem, the engine dynamically scrapes, parses, and generates 384-dimensional embeddings to find structural bridge problems in **<1.5s** with a 100% cache-miss resolution rate.
-* **$0 Local AI Inference:** Bypasses paid cloud APIs by orchestrating open-source models (Llama-3/Phi-3) natively via **Ollama**, utilizing unified memory architecture for zero-latency prompt generation.
+<table>
+  <tr>
+    <td align="center" width="25%">
+      <h3>⚙️ Core Engine</h3>
+      <img src="https://img.shields.io/badge/C++-11%2B-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white" alt="C++" />
+      <br><br>
+      <img src="https://img.shields.io/badge/ctypes-Bridge-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="ctypes" />
+    </td>
+    <td align="center" width="25%">
+      <h3>🧠 AI & NLP</h3>
+      <img src="https://img.shields.io/badge/Ollama-Local_LLM-FFFFFF?style=for-the-badge&logo=ollama&logoColor=black" alt="Ollama" />
+      <br><br>
+      <img src="https://img.shields.io/badge/FAISS-Vector_DB-172B4D?style=for-the-badge" alt="FAISS" />
+    </td>
+    <td align="center" width="25%">
+      <h3>🌐 Backend API</h3>
+      <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
+      <br><br>
+      <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
+    </td>
+    <td align="center" width="25%">
+      <h3>🖥️ Client</h3>
+      <img src="https://img.shields.io/badge/Chrome_V3-Extension-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Chrome" />
+      <br><br>
+      <img src="https://img.shields.io/badge/Vanilla_JS-Frontend-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" alt="Vanilla JS" />
+    </td>
+  </tr>
+</table>
 
 ---
 
-## 🧠 How the Graph Engine Works
+## 📐 How It Works: The Architecture
 
-The core routing is strictly mathematical, not probabilistic. 
+BridgeCF discards standard API wrappers in favor of low-level system optimizations and deterministic graph theory. The intelligence is split across three isolated pipelines:
 
-1. **Forward Pass:** The engine pulls the user's solved problems from the Codeforces API and traverses *backward* up the prerequisite edges to map all "Mastered" concepts.
-2. **Target Pass:** The engine takes the target problem and maps all "Required" concepts.
-3. **Bottleneck Calculation:** The engine computes the mathematical set difference: `Missing = Required \ Mastered`. 
-4. **LLM Generation:** The missing concepts are injected as hidden constraints into a local LLM, forcing the AI to generate a hint *teaching* that exact concept without revealing the problem's final code.
+### 1. The Deterministic Graph Engine (C++)
+At the core of BridgeCF is a custom **Heterogeneous Directed Acyclic Graph (DAG)** compiled into a shared memory library (`.so`) that calculates exactly what you *don't* know.
+* **The Forward Pass:** The engine fetches your Codeforces handle history and traverses *backward* up the DAG's edges to map all the mathematical concepts you have successfully mastered.
+* **The Target Pass:** It then looks at the problem you are stuck on and maps its required conceptual prerequisites.
+* **The Bottleneck:** Executing a Multi-Source BFS in **<2ms**, it calculates the set difference (`Required \ Mastered`) to isolate the exact mathematical concept holding you back, completely bypassing the JSON serialization overhead using Python `ctypes`.
+
+### 2. Semantic Vector Matching & JIT Ingestion (FAISS)
+Once the missing concept is found, the system finds an easier "Bridge Problem" to help you practice it.
+* **Vector Math:** Problems are encoded into 384-dimensional coordinate space using `SentenceTransformers`. A local FAISS index performs an L2 distance search to find structurally similar problems that share the same underlying logic.
+* **Just-In-Time (JIT) Pipeline:** If you request a hint for a brand new Codeforces problem, BridgeCF uses `cloudscraper` to bypass Cloudflare, dynamically scrapes the problem text, embeds it, and updates the local FAISS index on the fly. This guarantees a **100% cache-miss resolution rate** in under 1.5 seconds.
+
+### 3. Local Hint Generation (Ollama RAG)
+Instead of pinging expensive cloud APIs, BridgeCF orchestrates local Small Language Models (SLMs like `Llama-3-8B` or `Phi-3`) directly on your machine's unified memory.
+* **The Hidden Prompt:** The C++ engine passes the calculated "bottleneck concept" to the Python backend. The backend constructs a strict system prompt: *"The user knows X, but they do not know Y. Guide them to discover Y for this specific problem, but do NOT give them the code."*
+* **The Output:** The local LLM generates step-by-step, pedagogical hints that adapt to your exact skill level, all with **$0 cloud latency and zero cost**.
 
 ---
-
