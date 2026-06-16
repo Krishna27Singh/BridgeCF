@@ -59,4 +59,11 @@ Instead of pinging expensive cloud APIs, BridgeCF orchestrates local Small Langu
 * **The Hidden Prompt:** The C++ engine passes the calculated "bottleneck concept" to the Python backend. The backend constructs a strict system prompt.
 * **The Output:** The local LLM generates step-by-step, pedagogical hints that adapt to your exact skill level, all with **$0 cloud latency and zero cost**.
 
+### 4. Low-Level OS Optimization: Zero-Copy Memory Bridge
+A standard microservice architecture would rely on JSON serialization or `subprocess` calls to connect the Python web layer with the C++ math layer, resulting in heavy OS context-switching and heap fragmentation. 
+
+BridgeCF bypasses this using **Foreign Function Interfacing (FFI)**. 
+* The C++ engine is compiled as **Position-Independent Code (`-fPIC`)**.
+* Python's `ctypes` dynamically loads this shared object (`.so`) directly into the FastAPI server's **virtual address space**.
+* By passing raw memory pointers instead of serialized strings, both languages read from the exact same contiguous blocks of physical RAM. This "zero-copy" architecture completely eliminates Inter-Process Communication (IPC) bottlenecks, ensuring the graph traversal executes in `<2ms`.
 ---
