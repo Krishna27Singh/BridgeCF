@@ -39,7 +39,7 @@ By calculating the mathematical gap between your historical Codeforces submissio
 
 ---
 
-## 📐 How It Works: The Architecture
+## 📐 How It Works: 
 
 BridgeCF discards standard API wrappers in favor of low-level system optimizations and deterministic graph theory. The intelligence is split across three isolated pipelines:
 
