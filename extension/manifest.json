@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "CP Intelligent Hint Engine",
+  "version": "1.0",
+  "description": "Provides non-spoiler hints and bridge problems directly on Codeforces.",
+  "permissions": [
+    "activeTab"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://codeforces.com/problemset/problem/*", "https://codeforces.com/contest/*"],
+      "js": ["content.js"]
+    }
+  ]
+}
