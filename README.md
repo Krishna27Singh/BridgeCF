@@ -56,7 +56,7 @@ Once the missing concept is found, the system finds an easier "Bridge Problem" t
 
 ### 3. Local Hint Generation (Ollama RAG)
 Instead of pinging expensive cloud APIs, BridgeCF orchestrates local Small Language Models (SLMs like `Llama-3-8B` or `Phi-3`) directly on your machine's unified memory.
-* **The Hidden Prompt:** The C++ engine passes the calculated "bottleneck concept" to the Python backend. The backend constructs a strict system prompt: *"The user knows X, but they do not know Y. Guide them to discover Y for this specific problem, but do NOT give them the code."*
+* **The Hidden Prompt:** The C++ engine passes the calculated "bottleneck concept" to the Python backend. The backend constructs a strict system prompt.
 * **The Output:** The local LLM generates step-by-step, pedagogical hints that adapt to your exact skill level, all with **$0 cloud latency and zero cost**.
 
 ---
