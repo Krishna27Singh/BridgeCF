@@ -2,7 +2,7 @@
 
 BridgeCF is a high-performance browser extension designed for competitive programmers. Instead of immediately spoiling solutions or searching for generic tags, BridgeCF acts as an automated, personalized tutor. 
 
-By calculating the mathematical gap between your historical Codeforces submissions and a target problem, it routes you to optimal "Bridge Problems" and generates Socratic, step-by-step hints using local AI inference.
+By calculating the mathematical gap between your historical Codeforces submissions and a target problem, it routes you to optimal "Bridge Problems" (slightly easier version of the problem) and generates Socratic, step-by-step hints using local AI inference.
 
 ---
 
@@ -55,7 +55,7 @@ Once the missing concept is found, the system finds an easier "Bridge Problem" t
 * **Just-In-Time (JIT) Pipeline:** If you request a hint for a brand new Codeforces problem, BridgeCF uses `cloudscraper` to bypass Cloudflare, dynamically scrapes the problem text, embeds it, and updates the local FAISS index on the fly. This guarantees a **100% cache-miss resolution rate** in under 1.5 seconds.
 
 ### 3. Local Hint Generation (Ollama RAG)
-Instead of pinging expensive cloud APIs, BridgeCF orchestrates local Small Language Models (SLMs like `Llama-3-8B` or `Phi-3`) directly on your machine's unified memory.
+Instead of pinging expensive cloud APIs, BridgeCF orchestrates local Small Language Models (SLMs like `Llama-3-8B` or `Phi-3`) directly on the machine's unified memory.
 * **The Hidden Prompt:** The C++ engine passes the calculated "bottleneck concept" to the Python backend. The backend constructs a strict system prompt.
 * **The Output:** The local LLM generates step-by-step, pedagogical hints that adapt to your exact skill level, all with **$0 cloud latency and zero cost**.
 
