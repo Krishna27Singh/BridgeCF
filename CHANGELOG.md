@@ -1,1 +1,14 @@
 # Changelog
+
+## [0.2.0](https://github.com/Krishna27Singh/BridgeCF/compare/v0.1.0...v0.2.0) (2026-11-23)
+
+
+### Features
+
+* **phase3:** rebuild MV3 extension, add live web playground, hard-di… ([a8680ca](https://github.com/Krishna27Singh/BridgeCF/commit/a8680ca5e511d9fd0ca2735fdc5831ff6bde569f))
+* **phase3:** rebuild MV3 extension, add live web playground, hard-distractor evals, and Docker deploy config ([4f0ede9](https://github.com/Krishna27Singh/BridgeCF/commit/4f0ede988b3c213a749d719ee76bbeae5b1c1644))
+* **phase4:** add Docker CI validation, Release Please bot, high-prec… ([7a8cacb](https://github.com/Krishna27Singh/BridgeCF/commit/7a8cacbb1b1640c24c6179c9afe0eb7d71898298))
+* **phase4:** add Docker CI validation, Release Please bot, high-precision evals, and updated README ([ee47d14](https://github.com/Krishna27Singh/BridgeCF/commit/ee47d148fb40d6d6ae021d28006434ac22f25786))
+* rebuild BridgeCF with hardened C++ DAG, hybrid SQLite+FAISS retrieval, structured RAG, evals, and CI ([d673964](https://github.com/Krishna27Singh/BridgeCF/commit/d67396492b85f6768e560e3b3d90fc604b48deeb))
+
+## Changelog
