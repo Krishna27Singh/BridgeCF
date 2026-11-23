@@ -1,0 +1,9 @@
+backend/venv/
+**/__pycache__/
+*.pyc
+backend/engine.so
+backend/data/*.index
+backend/data/*.db
+.env
+.DS_Store
+backend/evals/latest_report.json
