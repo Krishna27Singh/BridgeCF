@@ -1,0 +1,33 @@
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+      - uses: actions/checkout@v4
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+      - name: Package Chrome extension
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        run: |
+          zip -r "bridgecf-extension-v${{ steps.release.outputs.tag_name }}.zip" extension
+      - name: Upload extension asset
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ steps.release.outputs.tag_name }}" \
+            "bridgecf-extension-v${{ steps.release.outputs.tag_name }}.zip" \
+            --clobber

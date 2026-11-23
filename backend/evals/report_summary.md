@@ -8,8 +8,8 @@
 | Pedagogical Difficulty Hit Rate | 0.333 | 0.747 |
 
 ## Latencies
-- Graph BFS p50/p95 ms: 0.000/0.000
-- Hybrid retrieval p50/p95 ms: 0.013/0.051
+- Graph BFS p50/p95 ms: 0.084us/0.458us
+- Hybrid retrieval p50/p95 ms: 0.0136ms/0.0749ms
 
 ## LLM / Guardrails
 - json_schema_pass_rate: 1.000
