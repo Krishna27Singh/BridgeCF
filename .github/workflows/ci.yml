@@ -15,6 +15,9 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: backend/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - name: Compile C++ graph engine
         run: make -C backend
       - name: Install dependencies
@@ -23,5 +26,7 @@ jobs:
         run: ruff check backend
       - name: Pytest
         run: pytest -v backend/tests
+      - name: Validate extension JavaScript
+        run: node --check extension/background.js extension/content.js extension/popup.js
       - name: Offline evaluation
         run: PYTHONPATH=backend python -m evals.run_evals --mode offline

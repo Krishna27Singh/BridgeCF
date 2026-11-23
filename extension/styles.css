@@ -1,0 +1,44 @@
+#bridgecf-hint-panel {
+  position: relative;
+  z-index: 10000;
+  width: 280px;
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #111827;
+  color: #f8fafc;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.24);
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+}
+#bridgecf-hint-panel:not(.bridgecf-sidebar) {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+}
+.bridgecf-header { display: flex; justify-content: space-between; align-items: flex-start; }
+.bridgecf-header span { display: block; color: #93c5fd; font-size: 10px; }
+#bridgecf-close { border: 0; background: transparent; color: #94a3b8; cursor: pointer; font-size: 18px; }
+#bridgecf-get-hint, .bridgecf-hints button {
+  width: 100%;
+  margin: 8px 0 4px;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px;
+  background: #2563eb;
+  color: white;
+  cursor: pointer;
+  text-align: left;
+}
+.bridgecf-section { margin-top: 10px; }
+.bridgecf-section h5 { margin: 0 0 6px; }
+.bridgecf-section ol { margin: 0; padding-left: 20px; }
+.bridgecf-section li { margin-bottom: 7px; }
+.bridgecf-section a { color: #93c5fd; }
+.bridgecf-concept { display: inline-block; margin: 2px; border-radius: 999px; padding: 3px 7px; background: #1e3a8a; }
+.bridgecf-badge { display: inline-block; margin: 2px 2px 0 0; border-radius: 4px; padding: 2px 4px; background: #334155; }
+.bridgecf-hints div { margin: 4px 0 8px; border-left: 2px solid #2563eb; padding: 6px 8px; background: #1e293b; line-height: 1.45; }
+.bridgecf-timing { margin-top: 8px; color: #86efac; font-size: 10px; }
+.bridgecf-muted { color: #94a3b8; }
+.bridgecf-loading { color: #93c5fd; }

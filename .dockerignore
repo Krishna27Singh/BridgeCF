@@ -1,0 +1,11 @@
+.git/
+backend/venv/
+**/__pycache__/
+.pytest_cache/
+.ruff_cache/
+extension/
+backend/tests/
+backend/data/
+*.so
+.env
+.DS_Store

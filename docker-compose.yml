@@ -1,0 +1,24 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATA_DIR: /app/backend/data
+      CORS_ORIGINS: http://localhost:3000
+      LLM_PROVIDER: fallback
+    env_file:
+      - path: backend/.env
+        required: false
+    volumes:
+      - bridgecf-data:/app/backend/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  bridgecf-data:

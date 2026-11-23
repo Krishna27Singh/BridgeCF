@@ -4,12 +4,29 @@
   "version": "1.0",
   "description": "Provides non-spoiler hints and bridge problems directly on Codeforces.",
   "permissions": [
-    "activeTab"
+    "storage"
   ],
+  "host_permissions": [
+    "https://codeforces.com/*",
+    "http://127.0.0.1:8000/*",
+    "http://localhost:8000/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
   "content_scripts": [
     {
-      "matches": ["https://codeforces.com/problemset/problem/*", "https://codeforces.com/contest/*"],
-      "js": ["content.js"]
+      "matches": [
+        "*://codeforces.com/problemset/problem/*",
+        "*://codeforces.com/contest/*/problem/*",
+        "*://codeforces.com/gym/*/problem/*"
+      ],
+      "js": ["content.js"],
+      "css": ["styles.css"]
     }
   ]
 }

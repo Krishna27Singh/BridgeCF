@@ -11,6 +11,13 @@ DB_PATH = DATA_DIR / "bridgecf.db"
 LOGGER = logging.getLogger("bridgecf.db")
 
 
+def configure_data_dir(data_dir: Path) -> None:
+    """Keep database assets aligned with Settings.DATA_DIR (and deployments)."""
+    global DATA_DIR, DB_PATH
+    DATA_DIR = data_dir.resolve()
+    DB_PATH = DATA_DIR / "bridgecf.db"
+
+
 def ensure_data_dir() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 

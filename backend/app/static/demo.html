@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BridgeCF Demo</title>
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
+      main { max-width: 760px; margin: 10vh auto; padding: 2rem; }
+      h1 { color: #67e8f9; }
+      form { display: grid; gap: 1rem; background: #1e293b; padding: 1.5rem; border-radius: 12px; }
+      label { display: grid; gap: .4rem; font-weight: 600; }
+      input { padding: .75rem; border: 1px solid #475569; border-radius: 8px; background: #0f172a; color: white; }
+      button { padding: .75rem 1rem; border: 0; border-radius: 8px; background: #06b6d4; color: #082f49; font-weight: 700; cursor: pointer; }
+      pre { min-height: 6rem; padding: 1rem; border-radius: 8px; background: #020617; white-space: pre-wrap; }
+      .grid { display: grid; gap: 1rem; margin-top: 1rem; }
+      .card { border: 1px solid #334155; border-radius: 10px; padding: 1rem; background: #1e293b; }
+      .bar { height: 8px; margin: 5px 0; border-radius: 99px; background: #334155; overflow: hidden; }
+      .bar span { display: block; height: 100%; background: #22d3ee; }
+      .hint-card button { width: 100%; margin-top: 6px; }
+      .hidden { display: none; }
+      #health { color: #86efac; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>BridgeCF Hint Engine</h1>
+      <p>Request a structured hint from the running API.</p>
+      <form id="hint-form">
+        <label>Problem ID <input id="problem" name="problem" value="1890_A" required /></label>
+        <label>Codeforces handle <input id="handle" name="handle" value="tourist" /></label>
+        <button type="submit">Generate hint</button>
+      </form>
+      <div id="health">Ready status: checking...</div>
+      <div id="result" class="grid"></div>
+    </main>
+    <script>
+      async function refreshHealth() {
+        try {
+          const response = await fetch("/ready");
+          const data = await response.json();
+          document.getElementById("health").textContent =
+            `Ready status: ${data.ready ? "healthy" : "degraded"}`;
+        } catch (_) {
+          document.getElementById("health").textContent = "Ready status: unavailable";
+        }
+      }
+      refreshHealth();
+
+      function scoreBar(label, value) {
+        const percent = Math.max(0, Math.min(100, Number(value) * 100));
+        return `<div>${label}: ${Number(value).toFixed(3)}
+          <div class="bar"><span style="width:${percent}%"></span></div></div>`;
+      }
+
+      document.getElementById("hint-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const result = document.getElementById("result");
+        result.innerHTML = '<div class="card">Loading...</div>';
+        try {
+          const response = await fetch("/api/hint", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              problem_id: document.getElementById("problem").value,
+              user_handle: document.getElementById("handle").value,
+              max_bridges: 3
+            })
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(JSON.stringify(data));
+          const concepts = (data.missing_concepts || []).join(", ") || "None identified";
+          const bridges = (data.bridge_problems || []).map((item) => `
+            <div class="card">
+              <a href="${item.problem.url}" target="_blank" rel="noopener">
+                ${item.problem.problem_id} · ${item.problem.rating || "Unrated"}
+              </a>
+              ${scoreBar("semantic", item.semantic_score)}
+              ${scoreBar("concept", item.concept_score)}
+              ${scoreBar("difficulty", item.difficulty_score)}
+              ${scoreBar("final", item.final_score)}
+            </div>`).join("");
+          const hint = data.hint || {};
+          const timing = data.timings_ms || {};
+          result.innerHTML = `
+            <div class="card"><strong>Missing concepts</strong><br>${concepts}</div>
+            <div class="grid">${bridges}</div>
+            <div class="card hint-card">
+              <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden')">Hint 1: Conceptual Nudge</button>
+              <p class="hidden">${hint.conceptual_nudge || ""}</p>
+              <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden')">Hint 2: Strategy Hint</button>
+              <p class="hidden">${hint.strategy_hint || ""}</p>
+              <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden')">Hint 3: Complexity Nudge</button>
+              <p class="hidden">${hint.complexity_nudge || ""}</p>
+              <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden')">Why This Bridge Problem</button>
+              <p class="hidden">${hint.bridge_rationale || ""}</p>
+            </div>
+            <div class="card">graph ${timing.graph_ms} ms · retrieval ${timing.retrieval_ms} ms ·
+              llm ${timing.llm_ms} ms · total ${timing.total_ms} ms ·
+              provider ${data.provider}${data.fallback_used ? " (fallback)" : ""}</div>`;
+          refreshHealth();
+        } catch (error) {
+          result.innerHTML = `<div class="card">${String(error)}</div>`;
+        }
+      });
+    </script>
+  </body>
+</html>
