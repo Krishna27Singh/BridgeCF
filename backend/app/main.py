@@ -1,11 +1,13 @@
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from . import db, graph_engine, vector_engine
 from .config import get_settings
@@ -20,11 +22,16 @@ from .services.llm_service import LLMHintService
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger("bridgecf.api")
 hint_service = LLMHintService(get_settings())
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     settings = get_settings()
+    if "DATA_DIR" in os.environ:
+        db.configure_data_dir(settings.data_dir)
+        vector_engine.DATA_DIR = settings.data_dir
+        vector_engine.INDEX_FILE = settings.index_path
     db.ensure_data_dir()
     graph_engine._load_native_engine()
     connection = db.connect()
@@ -87,6 +94,11 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 @app.get("/")
 def root():
     return {"status": "Hint Engine Backend Online"}
+
+
+@app.get("/demo", include_in_schema=False)
+def demo():
+    return FileResponse(STATIC_DIR / "demo.html", media_type="text/html")
 
 
 @app.get("/health", response_model=HealthResponse)

@@ -46,20 +46,52 @@ def run_offline(dataset):
 
         retrieval_start = time.perf_counter()
         candidates = []
-        for candidate_number in range(8):
-            rating = case["target_rating"] - 50 - candidate_number * 50
+        target_rating = case["target_rating"]
+        for candidate_number in range(12):
+            if candidate_number == 0:
+                rating = target_rating - 150
+                tags = ["implementation", "strings"]
+                score = 0.99
+                solved = False
+            elif candidate_number in (1, 2):
+                rating = target_rating
+                tags = ["implementation", "strings"]
+                score = 0.94 - candidate_number * 0.01
+                solved = True
+            elif candidate_number in (3, 4):
+                rating = target_rating + 400
+                tags = ["implementation", "strings"]
+                score = 0.91 - candidate_number * 0.01
+                solved = False
+            elif candidate_number in (5, 6):
+                rating = target_rating - 100
+                wrong_tags = [
+                    tag
+                    for tag in ["implementation", "strings", "geometry", "greedy"]
+                    if tag not in missing
+                ]
+                tags = wrong_tags[:2] or ["implementation"]
+                score = 0.89 - candidate_number * 0.02
+                solved = False
+            else:
+                rating = target_rating - 200 - (candidate_number - 7) * 25
+                tags = list(missing)
+                score = 0.78 - candidate_number * 0.01
+                solved = False
             candidates.append(
                 {
-                    "problem_id": f"{case['target_problem_id']}_{candidate_number}",
+                    "problem_id": f"{case['target_problem_id']}_d{candidate_number}",
                     "rating": rating,
-                    "tags": list(missing if candidate_number < 3 else case["target_tags"]),
-                    "score": 0.9 - candidate_number * 0.05,
+                    "tags": tags,
+                    "score": score,
+                    "solved": solved,
                 }
             )
         rng.shuffle(candidates)
         vector_top = sorted(candidates, key=lambda item: item["score"], reverse=True)
+        hybrid_candidates = [item for item in candidates if not item["solved"]]
         hybrid_top = sorted(
-            candidates,
+            hybrid_candidates,
             key=lambda item: (
                 item["score"]
                 + (0.25 if set(item["tags"]) & set(missing) else 0)
@@ -276,6 +308,38 @@ def main():
         print(f"| {name} | - | {value:.3f} |")
 
     (EVAL_DIR / "latest_report.json").write_text(json.dumps(report, indent=2))
+    summary_lines = [
+        "# BridgeCF Evaluation Report",
+        "",
+        "| Metric | Vector-Only | BridgeCF Hybrid |",
+        "|---|---:|---:|",
+    ]
+    for metric in (
+        "Recall@3",
+        "Recall@5",
+        "MRR",
+        "Pedagogical Difficulty Hit Rate",
+    ):
+        summary_lines.append(
+            f"| {metric} | {report['vector_only'][metric]:.3f} "
+            f"| {report['hybrid'][metric]:.3f} |"
+        )
+    summary_lines.extend(
+        [
+            "",
+            "## Latencies",
+            f"- Graph BFS p50/p95 ms: "
+            f"{report['graph_bfs_p50_ms']:.3f}/{report['graph_bfs_p95_ms']:.3f}",
+            f"- Hybrid retrieval p50/p95 ms: "
+            f"{report['hybrid_retrieval_p50_ms']:.3f}/"
+            f"{report['hybrid_retrieval_p95_ms']:.3f}",
+            "",
+            "## LLM / Guardrails",
+        ]
+    )
+    for name, value in report["llm_guardrails"].items():
+        summary_lines.append(f"- {name}: {value:.3f}")
+    (EVAL_DIR / "report_summary.md").write_text("\n".join(summary_lines) + "\n")
     if report["hybrid"]["Recall@3"] < 0.50:
         raise SystemExit("CI threshold failed: Hybrid Recall@3 < 0.50")
     if report["llm_guardrails"]["json_schema_pass_rate"] < 0.90:

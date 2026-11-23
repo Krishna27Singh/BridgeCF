@@ -5,6 +5,7 @@
 #include <atomic>
 #include <algorithm>
 #include <memory>
+#include <utility>
 
 using namespace std;
 
@@ -119,7 +120,7 @@ extern "C" {
                 }
                 for (auto& w : workers) w.join();
             }
-            current_level = move(next_level);
+            current_level = std::move(next_level);
         }
 
         // --- PHASE 2: Backward Pass (Parallel Requirement Trace) ---
@@ -171,7 +172,7 @@ extern "C" {
                 }
                 for (auto& w : workers) w.join();
             }
-            req_level = move(next_level);
+            req_level = std::move(next_level);
         }
 
         // --- PHASE 3: Set Difference & Frontier Intersection ---

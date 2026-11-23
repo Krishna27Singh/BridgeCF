@@ -1,83 +1,150 @@
-// Ensure we don't accidentally run multiple injection routines
-if (!window.hintEngineInjected) {
-    window.hintEngineInjected = true;
-    
-    // Inject the component when the page finishes loading
-    window.addEventListener("load", () => {
-        injectHintUI();
-    });
+if (!window.bridgeCFHintInjected) {
+  window.bridgeCFHintInjected = true;
+  window.addEventListener("load", injectHintUI);
+  if (document.readyState === "complete") injectHintUI();
+}
+
+function parseProblemId(pathname) {
+  const problemset = pathname.match(/^\/problemset\/problem\/([0-9]+)\/([A-Za-z0-9]+)\/?$/i);
+  if (problemset) return `${problemset[1]}_${problemset[2].toUpperCase()}`;
+  const contest = pathname.match(/^\/(?:contest|gym)\/([0-9]+)\/problem\/([A-Za-z0-9]+)\/?$/i);
+  if (contest) return `${contest[1]}_${contest[2].toUpperCase()}`;
+  return null;
+}
+
+function escapeHtml(value) {
+  const element = document.createElement("div");
+  element.textContent = String(value ?? "");
+  return element.innerHTML;
+}
+
+function badge(label, value) {
+  return `<span class="bridgecf-badge"><b>${escapeHtml(label)}</b> ${escapeHtml(Number(value).toFixed(2))}</span>`;
+}
+
+async function resolveHandle() {
+  const stored = await chrome.storage.sync.get(["userHandle"]);
+  if (stored.userHandle?.trim()) return stored.userHandle.trim();
+
+  const profile = document.querySelector('a[href^="/profile/"]');
+  if (profile) {
+    const match = profile.getAttribute("href").match(/^\/profile\/([^/?#]+)/);
+    if (match) return decodeURIComponent(match[1]);
+  }
+
+  const handle = window.prompt("Enter your Codeforces handle:");
+  if (!handle?.trim()) return null;
+  await chrome.storage.sync.set({ userHandle: handle.trim() });
+  return handle.trim();
 }
 
 function injectHintUI() {
-    // Locate the standard right-hand sidebar box element on Codeforces
-    const sidebar = document.querySelector("#sidebar");
-    if (!sidebar) return;
+  if (document.querySelector("#bridgecf-hint-panel")) return;
+  const problemId = parseProblemId(window.location.pathname);
+  if (!problemId) return;
 
-    // Create a container div
-    const container = document.createElement("div");
-    container.style.border = "1px solid #b9b9b9";
-    container.style.borderRadius = "4px";
-    container.style.padding = "10px";
-    container.style.marginBottom = "15px";
-    container.style.backgroundColor = "#fff";
+  const panel = document.createElement("section");
+  panel.id = "bridgecf-hint-panel";
+  panel.innerHTML = `
+    <div class="bridgecf-header">
+      <div><strong>Adaptive Hint Engine</strong><span id="bridgecf-provider"></span></div>
+      <button id="bridgecf-close" type="button" aria-label="Close">×</button>
+    </div>
+    <button id="bridgecf-get-hint" type="button">Get Adaptive Hint</button>
+    <div id="bridgecf-output" aria-live="polite"></div>
+  `;
 
-    // Add title
-    const title = document.createElement("h4");
-    title.innerText = "Pedagogical Hint Engine";
-    title.style.margin = "0 0 10px 0";
-    container.appendChild(title);
+  const sidebar = document.querySelector("#sidebar");
+  if (sidebar) {
+    panel.classList.add("bridgecf-sidebar");
+    sidebar.insertBefore(panel, sidebar.firstChild);
+  } else {
+    document.body.appendChild(panel);
+  }
 
-    // Add action button
-    const button = document.createElement("button");
-    button.innerText = "Get Adaptive Hint";
-    button.style.width = "100%";
-    button.style.padding = "8px";
-    button.style.cursor = "pointer";
-    container.appendChild(button);
+  panel.querySelector("#bridgecf-close").addEventListener("click", () => panel.remove());
+  panel.querySelector("#bridgecf-get-hint").addEventListener("click", async () => {
+    const output = panel.querySelector("#bridgecf-output");
+    output.innerHTML = '<span class="bridgecf-loading">Querying BridgeCF...</span>';
+    const handle = await resolveHandle();
+    if (!handle) {
+      output.textContent = "A Codeforces handle is required.";
+      return;
+    }
 
-    // Add a text area for displaying responses
-    const displayArea = document.createElement("div");
-    displayArea.style.marginTop = "10px";
-    displayArea.style.fontSize = "12px";
-    container.appendChild(displayArea);
-
-    // Insert our custom box at the top of the sidebar
-    sidebar.insertBefore(container, sidebar.firstChild);
-
-    // Setup action listener
-    button.addEventListener("click", async () => {
-        displayArea.innerText = "Querying backend engine...";
-        
-        // Extract basic parameters from current URL structure
-        const currentUrl = window.location.pathname; 
-        const problemId = currentUrl.split("/").filter(Boolean).slice(-2).join("_");
-
-        // Temporary hardcoded handle until we plug in full profile extraction
-        const userHandle = "guest_user"; 
-
-        try {
-            const response = await fetch("http://127.0.0.1:8000/api/hint", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ problem_id: problemId, user_handle: userHandle })
-            });
-            
-            const data = await response.json();
-            if (data.status === "success") {
-                displayArea.innerHTML = `
-                    <p><strong>Step-by-Step Guidance:</strong></p>
-                    <ul>
-                        <li>${data.hints[1]}</li>
-                        <li>${data.hints[2]}</li>
-                    </ul>
-                    <p><a href="${data.bridge_problem}" target="_blank">Try Bridge Problem</a></p>
-                `;
-            } else {
-                displayArea.innerText = "Failed to load hints properly.";
-            }
-        } catch (error) {
-            displayArea.innerText = "Error: Cannot connect to the local FastAPI server.";
-            console.error(error);
+    chrome.runtime.sendMessage(
+      { type: "GET_HINT", payload: { problem_id: problemId, user_handle: handle } },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          output.textContent = `Extension error: ${chrome.runtime.lastError.message}`;
+          return;
         }
+        if (!response?.ok) {
+          output.textContent = response?.error || "The hint request failed.";
+          return;
+        }
+        renderHint(response.data, output, panel);
+      },
+    );
+  });
+}
+
+function renderHint(data, output, panel) {
+  panel.querySelector("#bridgecf-provider").textContent =
+    ` · ${data.provider || "unknown"}${data.fallback_used ? " · fallback" : ""}`;
+
+  const concepts = (data.missing_concepts || [])
+    .map((concept) => `<span class="bridgecf-concept">${escapeHtml(concept)}</span>`)
+    .join("");
+
+  const bridges = (data.bridge_problems || []).map((item) => {
+    const problem = item.problem || {};
+    return `
+      <li>
+        <a href="${escapeHtml(problem.url || "#")}" target="_blank" rel="noopener">
+          ${escapeHtml(problem.problem_id)}${problem.rating ? ` · ${escapeHtml(problem.rating)}` : ""}
+        </a>
+        <div>
+          ${badge("semantic", item.semantic_score)}
+          ${badge("concept", item.concept_score)}
+          ${badge("difficulty", item.difficulty_score)}
+          ${badge("final", item.final_score)}
+        </div>
+      </li>`;
+  }).join("");
+
+  const hint = data.hint || {};
+  const timings = data.timings_ms || {};
+  output.innerHTML = `
+    <div class="bridgecf-section">
+      <h5>Bottleneck concepts</h5>
+      <div>${concepts || '<span class="bridgecf-muted">None identified</span>'}</div>
+    </div>
+    <div class="bridgecf-section">
+      <h5>Top bridge problems</h5>
+      <ol>${bridges || "<li>No bridge problem found</li>"}</ol>
+    </div>
+    <div class="bridgecf-section bridgecf-hints">
+      <button type="button" data-hint="1">Hint 1: Conceptual Nudge</button>
+      <div data-hint-content="1" hidden>${escapeHtml(hint.conceptual_nudge)}</div>
+      <button type="button" data-hint="2">Hint 2: Strategy Hint</button>
+      <div data-hint-content="2" hidden>${escapeHtml(hint.strategy_hint)}</div>
+      <button type="button" data-hint="3">Hint 3: Complexity Nudge</button>
+      <div data-hint-content="3" hidden>${escapeHtml(hint.complexity_nudge)}</div>
+      <button type="button" data-hint="4">Why This Bridge Problem</button>
+      <div data-hint-content="4" hidden>${escapeHtml(hint.bridge_rationale)}</div>
+    </div>
+    <div class="bridgecf-timing">
+      graph ${escapeHtml(timings.graph_ms?.toFixed?.(1) ?? timings.graph_ms)} ms ·
+      total ${escapeHtml(timings.total_ms?.toFixed?.(1) ?? timings.total_ms)} ms
+    </div>`;
+
+  output.querySelectorAll("[data-hint]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const content = output.querySelector(
+        `[data-hint-content="${button.dataset.hint}"]`,
+      );
+      content.hidden = !content.hidden;
     });
+  });
 }

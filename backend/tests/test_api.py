@@ -111,3 +111,36 @@ def test_hint_invalid_input_returns_422():
     with TestClient(app) as client:
         response = client.post("/api/hint", json={"problem_id": ""})
     assert response.status_code == 422
+
+
+def test_demo_and_root_routes():
+    with TestClient(app) as client:
+        root_response = client.get("/")
+        demo_response = client.get("/demo")
+
+    assert root_response.status_code == 200
+    assert root_response.json() == {"status": "Hint Engine Backend Online"}
+    assert demo_response.status_code == 200
+    assert "text/html" in demo_response.headers["content-type"]
+    assert "BridgeCF" in demo_response.text
+
+
+def test_extension_manifest_and_files():
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    manifest_path = root / "extension" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+
+    assert manifest["manifest_version"] == 3
+    assert manifest["background"]["service_worker"] == "background.js"
+    assert manifest["action"]["default_popup"] == "popup.html"
+    for relative in (
+        "background.js",
+        "content.js",
+        "popup.js",
+        "popup.html",
+        "styles.css",
+    ):
+        assert (root / "extension" / relative).exists()
