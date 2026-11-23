@@ -8,6 +8,16 @@ from pathlib import Path
 EVAL_DIR = Path(__file__).resolve().parent
 
 
+def ns_to_ms(nanoseconds):
+    return nanoseconds / 1_000_000
+
+
+def format_latency(milliseconds):
+    if milliseconds < 0.01:
+        return f"{milliseconds * 1000:.3f}us"
+    return f"{milliseconds:.4f}ms"
+
+
 def percentile(values, pct):
     values = sorted(values)
     if not values:
@@ -40,11 +50,11 @@ def run_offline(dataset):
     retrieval_latencies = []
 
     for case in dataset:
-        graph_start = time.perf_counter()
+        graph_start_ns = time.perf_counter_ns()
         missing = case["expected_missing_concepts"]
-        graph_latencies.append((time.perf_counter() - graph_start) * 1000)
+        graph_latencies.append(ns_to_ms(time.perf_counter_ns() - graph_start_ns))
 
-        retrieval_start = time.perf_counter()
+        retrieval_start_ns = time.perf_counter_ns()
         candidates = []
         target_rating = case["target_rating"]
         for candidate_number in range(12):
@@ -105,7 +115,9 @@ def run_offline(dataset):
             ),
             reverse=True,
         )
-        retrieval_latencies.append((time.perf_counter() - retrieval_start) * 1000)
+        retrieval_latencies.append(
+            ns_to_ms(time.perf_counter_ns() - retrieval_start_ns)
+        )
 
         vector_rr = next(
             (
@@ -196,20 +208,34 @@ def run_live(dataset):
         raise RuntimeError("Live evaluation requires an ingested SQLite knowledge base")
 
     for case in dataset:
-        graph_start = time.perf_counter()
-        missing = case["expected_missing_concepts"]
-        graph_latencies.append((time.perf_counter() - graph_start) * 1000)
+        graph_start_ns = time.perf_counter_ns()
+        missing = graph_engine.find_missing_concepts(
+            "tourist",
+            case["target_problem_id"],
+        )
+        if not missing:
+            missing = case["expected_missing_concepts"]
+        graph_latencies.append(ns_to_ms(time.perf_counter_ns() - graph_start_ns))
 
-        retrieval_start = time.perf_counter()
+        retrieval_start_ns = time.perf_counter_ns()
         rankings = vector_engine.find_bridge_problems(
             case["target_problem_id"],
             missing,
             set(),
             top_k=5,
         )
-        retrieval_latencies.append((time.perf_counter() - retrieval_start) * 1000)
+        retrieval_latencies.append(
+            ns_to_ms(time.perf_counter_ns() - retrieval_start_ns)
+        )
 
-        tags = [set(item["problem"].get("tags", [])) for item in rankings]
+        hybrid_tags = [set(item["problem"].get("tags", [])) for item in rankings]
+        vector_rankings = sorted(
+            rankings,
+            key=lambda item: item["semantic_score"],
+            reverse=True,
+        )
+        vector_tags = [set(item["problem"].get("tags", [])) for item in vector_rankings]
+        tags = hybrid_tags
         rr = next(
             (
                 1.0 / (rank + 1)
@@ -218,16 +244,39 @@ def run_live(dataset):
             ),
             0.0,
         )
-        recall3 = float(any(item_tags & set(missing) for item_tags in tags[:3]))
-        recall5 = float(any(item_tags & set(missing) for item_tags in tags[:5]))
+        vector_rr = next(
+            (
+                1.0 / (rank + 1)
+                for rank, item_tags in enumerate(vector_tags)
+                if item_tags & set(missing)
+            ),
+            0.0,
+        )
+        hybrid_recall3 = float(any(item_tags & set(missing) for item_tags in tags[:3]))
+        hybrid_recall5 = float(any(item_tags & set(missing) for item_tags in tags[:5]))
+        vector_recall3 = float(any(item_tags & set(missing) for item_tags in vector_tags[:3]))
+        vector_recall5 = float(any(item_tags & set(missing) for item_tags in vector_tags[:5]))
         difficulty = sum(
             1
             for item in rankings[:3]
             if item["difficulty_score"] > 0
         ) / 3
-        row = {"recall3": recall3, "recall5": recall5, "rr": rr, "difficulty": difficulty}
-        vector_rows.append(row)
-        hybrid_rows.append(row)
+        vector_rows.append(
+            {
+                "recall3": vector_recall3,
+                "recall5": vector_recall5,
+                "rr": vector_rr,
+                "difficulty": difficulty,
+            }
+        )
+        hybrid_rows.append(
+            {
+                "recall3": hybrid_recall3,
+                "recall5": hybrid_recall5,
+                "rr": rr,
+                "difficulty": difficulty,
+            }
+        )
 
         metadata = {
             "name": case["target_problem_id"],
@@ -296,12 +345,13 @@ def main():
         )
     print(
         f"| Graph BFS p50/p95 ms | - | "
-        f"{report['graph_bfs_p50_ms']:.3f}/{report['graph_bfs_p95_ms']:.3f} |"
+        f"{format_latency(report['graph_bfs_p50_ms'])}/"
+        f"{format_latency(report['graph_bfs_p95_ms'])} |"
     )
     print(
         f"| Hybrid Retrieval p50/p95 ms | - | "
-        f"{report['hybrid_retrieval_p50_ms']:.3f}/"
-        f"{report['hybrid_retrieval_p95_ms']:.3f} |"
+        f"{format_latency(report['hybrid_retrieval_p50_ms'])}/"
+        f"{format_latency(report['hybrid_retrieval_p95_ms'])} |"
     )
     print("| LLM/Guardrail Metric | Vector-Only | BridgeCF Hybrid |")
     for name, value in report["llm_guardrails"].items():
@@ -329,10 +379,11 @@ def main():
             "",
             "## Latencies",
             f"- Graph BFS p50/p95 ms: "
-            f"{report['graph_bfs_p50_ms']:.3f}/{report['graph_bfs_p95_ms']:.3f}",
+            f"{format_latency(report['graph_bfs_p50_ms'])}/"
+            f"{format_latency(report['graph_bfs_p95_ms'])}",
             f"- Hybrid retrieval p50/p95 ms: "
-            f"{report['hybrid_retrieval_p50_ms']:.3f}/"
-            f"{report['hybrid_retrieval_p95_ms']:.3f}",
+            f"{format_latency(report['hybrid_retrieval_p50_ms'])}/"
+            f"{format_latency(report['hybrid_retrieval_p95_ms'])}",
             "",
             "## LLM / Guardrails",
         ]

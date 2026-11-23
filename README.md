@@ -1,69 +1,125 @@
-# 🌉 BridgeCF: Adaptive Codeforces Hint Engine
+# BridgeCF
 
-BridgeCF is a high-performance browser extension designed for competitive programmers. Instead of immediately spoiling solutions or searching for generic tags, BridgeCF acts as an automated, personalized tutor. 
+[![CI](https://github.com/Krishna27Singh/BridgeCF/actions/workflows/ci.yml/badge.svg)](https://github.com/Krishna27Singh/BridgeCF/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Krishna27Singh/BridgeCF)](https://github.com/Krishna27Singh/BridgeCF/releases)
 
-By calculating the mathematical gap between your historical Codeforces submissions and a target problem, it routes you to optimal "Bridge Problems" (slightly easier version of the problem) and generates Socratic, step-by-step hints using local AI inference.
+BridgeCF is an adaptive Codeforces hint engine. It combines a C++ concept DAG, user submission history, a SQLite problem catalog, FAISS semantic retrieval, hybrid bridge ranking, and a provider-agnostic structured RAG hint service.
 
----
+## Architecture
 
-## 🧰 Tech Stack & Infrastructure
+```mermaid
+flowchart LR
+  A[Chrome MV3 Extension] -->|POST /api/hint| B[FastAPI Backend]
+  D[Web Demo /demo] -->|same-origin API| B
+  B --> C[C++17 DAG Engine via ctypes]
+  B --> E[SQLite Problem Catalog]
+  B --> F[384-dim FAISS Hybrid Ranker]
+  C --> G[Missing Concepts]
+  E --> F
+  G --> F
+  F --> H[Top Bridge Problems]
+  H --> I[Provider-Agnostic RAG]
+  G --> I
+  I --> J[Ollama or Gemini]
+  J --> K[StructuredHint + Anti-Spoiler Guardrails]
+  K --> B
+```
 
-<table>
-  <tr>
-    <td align="center" width="25%">
-      <h3>⚙️ Core Engine</h3>
-      <img src="https://img.shields.io/badge/C++-11%2B-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white" alt="C++" />
-      <br><br>
-      <img src="https://img.shields.io/badge/ctypes-Bridge-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="ctypes" />
-    </td>
-    <td align="center" width="25%">
-      <h3>🧠 AI & NLP</h3>
-      <img src="https://img.shields.io/badge/Ollama-Local_LLM-FFFFFF?style=for-the-badge&logo=ollama&logoColor=black" alt="Ollama" />
-      <br><br>
-      <img src="https://img.shields.io/badge/FAISS-Vector_DB-172B4D?style=for-the-badge" alt="FAISS" />
-    </td>
-    <td align="center" width="25%">
-      <h3>🌐 Backend API</h3>
-      <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
-      <br><br>
-      <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
-    </td>
-    <td align="center" width="25%">
-      <h3>🖥️ Client</h3>
-      <img src="https://img.shields.io/badge/Chrome_V3-Extension-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Chrome" />
-      <br><br>
-      <img src="https://img.shields.io/badge/Vanilla_JS-Frontend-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" alt="Vanilla JS" />
-    </td>
-  </tr>
-</table>
+## What Is Implemented
 
----
+- C++17 shared-library DAG engine loaded through Python `ctypes` with a Python BFS fallback.
+- SQLite problem, prerequisite, user-cache, and hint-log tables.
+- 384-dimensional `sentence-transformers/all-MiniLM-L6-v2` embeddings with normalized FAISS `IndexFlatIP`.
+- JIT Codeforces problem ingestion and a weighted hybrid bridge ranker.
+- FastAPI health, readiness, demo, and hint endpoints.
+- Pydantic structured hints with one corrective retry and deterministic fallback.
+- Ollama, Gemini, OpenAI-compatible, and fallback providers.
+- MV3 Chrome extension with popup configuration and service-worker API calls.
+- Docker, Docker Compose, Render, pytest, Ruff, GitHub Actions, and Release Please automation.
 
-## 📐 How It Works: 
+## Clone and Run Locally
 
-BridgeCF discards standard API wrappers in favor of low-level system optimizations and deterministic graph theory. The intelligence is split across three isolated pipelines:
+```bash
+git clone https://github.com/Krishna27Singh/BridgeCF.git
+cd BridgeCF
 
-### 1. The Deterministic Graph Engine (C++)
-At the core of BridgeCF is a custom **Heterogeneous Directed Acyclic Graph (DAG)** compiled into a shared memory library (`.so`) that calculates exactly what you *don't* know.
-* **The Forward Pass:** The engine fetches your Codeforces handle history and traverses *backward* up the DAG's edges to map all the mathematical concepts you have successfully mastered.
-* **The Target Pass:** It then looks at the problem you are stuck on and maps its required conceptual prerequisites.
-* **The Bottleneck:** Executing a Multi-Source BFS in **<2ms**, it calculates the set difference (`Required \ Mastered`) to isolate the exact mathematical concept holding you back, completely bypassing the JSON serialization overhead using Python `ctypes`.
+python3.11 -m venv backend/venv
+source backend/venv/bin/activate
+python -m pip install -r backend/requirements.txt
 
-### 2. Semantic Vector Matching & JIT Ingestion (FAISS)
-Once the missing concept is found, the system finds an easier "Bridge Problem" to help you practice it.
-* **Vector Math:** Problems are encoded into 384-dimensional coordinate space using `SentenceTransformers`. A local FAISS index performs an L2 distance search to find structurally similar problems that share the same underlying logic.
-* **Just-In-Time (JIT) Pipeline:** If you request a hint for a brand new Codeforces problem, BridgeCF uses `cloudscraper` to bypass Cloudflare, dynamically scrapes the problem text, embeds it, and updates the local FAISS index on the fly. This guarantees a **100% cache-miss resolution rate** in under 1.5 seconds.
+make -C backend
+python backend/app/scripts/build_knowledge_base.py --limit 1000
 
-### 3. Local Hint Generation (Ollama RAG)
-Instead of pinging expensive cloud APIs, BridgeCF orchestrates local Small Language Models (SLMs like `Llama-3-8B` or `Phi-3`) directly on the machine's unified memory.
-* **The Hidden Prompt:** The C++ engine passes the calculated "bottleneck concept" to the Python backend. The backend constructs a strict system prompt.
-* **The Output:** The local LLM generates step-by-step, pedagogical hints that adapt to your exact skill level, all with **$0 cloud latency and zero cost**.
+cd backend
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
 
-### 4. Low-Level Optimization: Zero-Copy Memory Bridge
-A standard microservice architecture would rely on JSON serialization or `subprocess` calls to connect the Python web layer with the C++ math layer, resulting in heavy OS context-switching and heap fragmentation. 
+Open `http://127.0.0.1:8000/demo`. Full catalog ingestion can omit `--limit`:
 
-BridgeCF bypasses this using **Foreign Function Interfacing (FFI)**. 
-* The C++ engine is compiled as **Position-Independent Code (`-fPIC`)**.
-* Python's `ctypes` dynamically loads this shared object (`.so`) directly into the FastAPI server's **virtual address space**.
-* By passing raw memory pointers instead of serialized strings, both languages read from the exact same contiguous blocks of physical RAM. This "zero-copy" architecture completely eliminates Inter-Process Communication (IPC) bottlenecks, ensuring the graph traversal executes in `<2ms`.
----
+```bash
+python backend/app/scripts/build_knowledge_base.py
+```
+
+Configure providers by copying the environment template:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Supported `LLM_PROVIDER` values are `ollama`, `gemini`, `openai_compat`, and `fallback`. A provider connection failure or spoiler/schema failure returns the deterministic structured fallback.
+
+## Chrome Extension
+
+1. Open `chrome://extensions`.
+2. Enable Developer mode.
+3. Choose `Load unpacked` and select `extension/`.
+4. Open the extension popup and set the Codeforces handle and API URL.
+5. The default API URL is `http://127.0.0.1:8000`.
+
+The MV3 service worker performs backend requests, avoiding direct HTTPS-to-HTTP fetches from Codeforces pages.
+
+## Tests and Evaluation
+
+```bash
+backend/venv/bin/python -m ruff check backend
+backend/venv/bin/python -m pytest -v backend/tests
+
+PYTHONPATH=backend backend/venv/bin/python \
+  -m evals.run_evals --mode offline
+```
+
+Live evaluation uses the real SQLite and FAISS assets and configured provider:
+
+```bash
+LLM_PROVIDER=ollama PYTHONPATH=backend backend/venv/bin/python \
+  -m evals.run_evals --mode live
+
+LLM_PROVIDER=gemini PYTHONPATH=backend backend/venv/bin/python \
+  -m evals.run_evals --mode live
+```
+
+Live mode writes `backend/evals/report_summary.md` and `backend/evals/latest_report.json`.
+
+## Docker
+
+```bash
+docker compose up --build
+```
+
+The compose volume persists SQLite and FAISS assets under `/app/backend/data`. The container health check calls `/health`.
+
+## Evaluation Results
+
+### Offline Hard-Distractor Ablation
+
+| Metric | Vector-Only | BridgeCF Hybrid |
+|---|---:|---:|
+| Recall@3 | 0.380 | 1.000 |
+| Recall@5 | 0.380 | 1.000 |
+| MRR | 0.458 | 0.690 |
+| Pedagogical Difficulty Hit Rate | 0.333 | 0.747 |
+| JSON Schema Pass Rate | - | 1.000 |
+| Anti-Spoiler Pass Rate | - | 1.000 |
+| Concept Alignment Rate | - | 1.000 |
+
+These values are generated by the deterministic offline hard-distractor suite. Live 10k benchmarks should be pasted here after running `--mode live` against a fully ingested database.
