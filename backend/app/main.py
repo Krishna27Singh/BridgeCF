@@ -1,8 +1,11 @@
 import logging
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from . import db, graph_engine, vector_engine
 from .config import get_settings
@@ -11,10 +14,8 @@ from .schemas import (
     HintRequest,
     HintResponse,
     ReadyResponse,
-    StructuredHint,
 )
 from .services.llm_service import LLMHintService
-
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger("bridgecf.api")
@@ -25,13 +26,23 @@ hint_service = LLMHintService(get_settings())
 async def lifespan(application: FastAPI):
     settings = get_settings()
     db.ensure_data_dir()
+    graph_engine._load_native_engine()
     connection = db.connect()
     try:
         db.initialize_schema(connection)
+        db.reconciliation_status(connection)
+    finally:
+        connection.close()
+    vector_engine.load_database()
+    connection = db.connect()
+    try:
+        db.reconciliation_status(
+            connection,
+            getattr(vector_engine.INDEX, "ntotal", None),
+        )
     finally:
         connection.close()
     graph_engine._initialize_dynamic_graph()
-    vector_engine.load_database()
     LOGGER.info(
         "startup_complete db=%s native_engine=%s",
         settings.db_path,
@@ -43,13 +54,34 @@ async def lifespan(application: FastAPI):
 
 app = FastAPI(title="BridgeCF Hint Engine", lifespan=lifespan)
 
+settings = get_settings()
+allow_credentials = "*" not in settings.cors_origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=settings.cors_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    del request
+    return JSONResponse(
+        status_code=422,
+        content={"status": "error", "error": "invalid_request", "detail": exc.errors()},
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    del request
+    LOGGER.exception("Unhandled API exception", exc_info=exc)
+    return JSONResponse(
+        status_code=500,
+        content={"status": "error", "error": "internal_error"},
+    )
 
 
 @app.get("/")
@@ -71,6 +103,16 @@ def ready():
     settings = get_settings()
     graph_ready = graph_engine.engine is not None
     vector_ready = vector_engine.INDEX is not None and settings.db_path.exists()
+    if vector_ready:
+        connection = db.connect()
+        try:
+            reconciliation = db.reconciliation_status(
+                connection,
+                getattr(vector_engine.INDEX, "ntotal", None),
+            )
+            vector_ready = reconciliation["consistent"]
+        finally:
+            connection.close()
     return {
         "status": "ready" if graph_ready or vector_ready else "degraded",
         "ready": graph_ready and vector_ready,
@@ -81,55 +123,83 @@ def ready():
 
 @app.post("/api/hint", response_model=HintResponse)
 async def generate_hint(request: HintRequest):
+    started = time.perf_counter()
     target_id = request.problem_id
     handle = request.user_handle
 
+    graph_started = time.perf_counter()
     missing_concepts = graph_engine.find_missing_concepts(handle, target_id)
     solved_set = set(graph_engine.get_user_solved_problems(handle))
+    graph_ms = (time.perf_counter() - graph_started) * 1000
+
+    retrieval_started = time.perf_counter()
     rankings = vector_engine.find_bridge_problems(
         target_id,
         missing_concepts,
         solved_set,
-        top_k=3,
+        top_k=request.max_bridges,
     )
-    bridge_url = rankings[0]["problem"]["url"] if rankings else None
-    bridge_id = rankings[0]["problem"]["problem_id"] if rankings else None
+    retrieval_ms = (time.perf_counter() - retrieval_started) * 1000
 
-    if not missing_concepts:
-        message = "You already know all the mapped concepts required for this problem. Focus on implementation and constraints."
-    elif "Graph Not Mapped" in missing_concepts[0] or "C++ Engine Offline" in missing_concepts[0]:
-        message = f"We found a semantic bridge problem, but {target_id} is not mapped in the dependency graph yet."
-        missing_concepts = []
-    else:
-        message = f"For {target_id}, focus on these prerequisites: {', '.join(missing_concepts)}"
+    bridge = rankings[0] if rankings else None
+    top_problem = bridge["problem"] if bridge else None
+    bridge_id = top_problem["problem_id"] if top_problem else None
 
-    provider_name = str(get_settings().llm_provider).lower()
-    generated = hint_service.generate(target_id, missing_concepts, bridge_id)
-    structured = StructuredHint(
-        level=generated.get("level", "guided"),
-        message=generated["message"],
-        next_step=generated.get("next_step", ""),
-        missing_concepts=missing_concepts,
-        bridge_problem_id=bridge_id,
-    )
+    connection = db.connect()
+    try:
+        row = connection.execute(
+            "SELECT name, rating, tags_json, statement FROM problems WHERE problem_id = ?",
+            (target_id,),
+        ).fetchone()
+    finally:
+        connection.close()
+    import json
+    target_metadata = {}
+    if row:
+        target_metadata = {
+            "name": row["name"],
+            "rating": row["rating"],
+            "tags": json.loads(row["tags_json"] or "[]"),
+            "statement": row["statement"],
+        }
 
-    LOGGER.info(
-        "hint_request problem_id=%s handle=%s missing=%s bridge=%s provider=%s",
+    llm_started = time.perf_counter()
+    structured, provider_name, fallback_used = hint_service.generate(
         target_id,
-        handle,
-        ",".join(missing_concepts) or "-",
-        bridge_id or "-",
-        provider_name,
+        missing_concepts,
+        top_problem,
+        target_metadata,
     )
+    llm_ms = (time.perf_counter() - llm_started) * 1000
+    total_ms = (time.perf_counter() - started) * 1000
+
+    connection = db.connect()
+    try:
+        db.log_hint(
+            connection,
+            handle,
+            target_id,
+            missing_concepts,
+            bridge_id,
+            provider_name,
+            total_ms,
+        )
+    finally:
+        connection.close()
 
     return {
         "status": "success",
         "problem_id": target_id,
-        "message": structured.message,
+        "user_handle": handle,
         "missing_concepts": missing_concepts,
-        "bridge_problem": bridge_url or "#",
-        "bridge_id": bridge_id or "Unknown",
-        "bridge_rankings": rankings,
+        "bridge_problems": rankings,
         "hint": structured,
         "provider": provider_name,
+        "fallback_used": fallback_used,
+        "timings_ms": {
+            "graph_ms": round(graph_ms, 3),
+            "retrieval_ms": round(retrieval_ms, 3),
+            "llm_ms": round(llm_ms, 3),
+            "total_ms": round(total_ms, 3),
+        },
     }

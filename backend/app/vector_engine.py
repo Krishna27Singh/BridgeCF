@@ -4,17 +4,15 @@ import os
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Iterable, List, Optional, Set, Tuple
 
+import cloudscraper
 import faiss
 import numpy as np
-import requests
 from bs4 import BeautifulSoup
 from sentence_transformers import SentenceTransformer
-import cloudscraper
 
 from . import db
-
 
 LOGGER = logging.getLogger(__name__)
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
@@ -38,9 +36,6 @@ def load_database() -> None:
         else:
             LOGGER.warning("Vector database missing at %s", INDEX_FILE)
             INDEX = faiss.IndexFlatIP(384)
-
-
-load_database()
 
 
 def _load_model():
@@ -121,7 +116,8 @@ def jit_ingest_problem(problem_id: str) -> Optional[int]:
             connection.execute(
                 """
                 INSERT OR REPLACE INTO problems
-                (problem_id, contest_id, problem_index, name, rating, tags_json, statement, faiss_id)
+                (problem_id, contest_id, problem_index, name, rating, tags_json,
+                 statement, faiss_id)
                 VALUES (?, ?, ?, ?, NULL, '[]', ?, ?)
                 """,
                 (problem_id, int(contest_id), index_letter, problem_id, text, faiss_id),

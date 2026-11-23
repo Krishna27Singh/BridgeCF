@@ -18,23 +18,38 @@ shared_mutex graph_mutex; // Readers-Writer lock for thread-safe concurrent FFI 
 extern "C" {
 
     // 1. Initialize the contiguous array size (Exclusive Write Lock)
-    void init_graph(int max_nodes) {
+    int init_graph(int max_nodes) {
+        if (max_nodes <= 0) {
+            unique_lock<shared_mutex> lock(graph_mutex);
+            adj_rev.clear();
+            return -1;
+        }
         unique_lock<shared_mutex> lock(graph_mutex);
         adj_rev.clear();
         adj_rev.resize(max_nodes + 1);
+        return 0;
     }
 
     // 2. Build the graph edges (Exclusive Write Lock)
-    void add_edge(int prereq, int target) {
+    int add_edge(int prereq, int target) {
         unique_lock<shared_mutex> lock(graph_mutex);
-        if (target < adj_rev.size()) {
-            adj_rev[target].push_back(prereq);
+        if (prereq < 0 || target < 0 ||
+            static_cast<size_t>(prereq) >= adj_rev.size() ||
+            static_cast<size_t>(target) >= adj_rev.size()) {
+            return -1;
         }
+        adj_rev[target].push_back(prereq);
+        return 0;
     }
 
     // 3. The Core Algorithm: Parallel Frontier Reachability Search (Shared Read Lock)
     int find_bottlenecks(int* solved_ids, int num_solved, int target_id, int* out_bottlenecks, int max_out) {
-        
+        if (adj_rev.empty() || target_id < 0 ||
+            static_cast<size_t>(target_id) >= adj_rev.size() ||
+            num_solved < 0 || max_out <= 0 || out_bottlenecks == nullptr ||
+            (num_solved > 0 && solved_ids == nullptr)) {
+            return -1;
+        }
         // Allow multiple concurrent Python threads to read the graph simultaneously
         shared_lock<shared_mutex> lock(graph_mutex);
         int n = adj_rev.size();
@@ -50,7 +65,7 @@ extern "C" {
         // --- PHASE 1: Forward Pass (Parallel Mastery Propagation) ---
         vector<int> current_level;
         for (int i = 0; i < num_solved; i++) {
-            if (solved_ids[i] < n) {
+            if (solved_ids[i] >= 0 && solved_ids[i] < n) {
                 current_level.push_back(solved_ids[i]);
                 mastered[solved_ids[i]] = true;
             }
@@ -182,6 +197,6 @@ extern "C" {
             }
         }
 
-        return bottleneck_count;
+        return min(bottleneck_count, max_out);
     }
 }

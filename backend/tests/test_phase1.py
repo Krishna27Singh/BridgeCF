@@ -1,23 +1,20 @@
 import ctypes
-import json
-import sqlite3
 import sys
 import time
 from pathlib import Path
 
 import faiss
 import numpy as np
-import pytest
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
-import db
-import graph_engine
-import vector_engine
+from app import db, graph_engine, vector_engine  # noqa: E402
 
 
 def test_cpp_engine_bounds_safety_and_multi_source_bfs():
+    graph_engine._load_native_engine()
+    graph_engine._initialize_dynamic_graph()
     assert graph_engine.engine is not None
     engine = graph_engine.engine
 

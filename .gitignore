@@ -6,3 +6,4 @@ backend/data/*.index
 backend/data/*.db
 .env
 .DS_Store
+backend/evals/latest_report.json

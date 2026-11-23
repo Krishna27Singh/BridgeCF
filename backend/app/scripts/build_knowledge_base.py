@@ -4,7 +4,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Iterable, List, Set, Tuple
+from typing import Iterable, List, Tuple
 
 import faiss
 import numpy as np
@@ -15,8 +15,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from app import db
-
+from app import db  # noqa: E402
 
 DATA_DIR = BACKEND_DIR / "data"
 INDEX_PATH = DATA_DIR / "vector_database.index"
@@ -150,7 +149,8 @@ def build(limit=None) -> Tuple[int, int]:
 
     for batch_index, problem_batch in enumerate(batch(normalized, 64), start=1):
         texts = [
-            f"{problem['name']} | tags: {', '.join(problem['tags'])} | rating: {problem['rating'] or 'unrated'}"
+            f"{problem['name']} | tags: {', '.join(problem['tags'])} "
+            f"| rating: {problem['rating'] or 'unrated'}"
             for problem in problem_batch
         ]
         encoded = model.encode(texts, batch_size=64, convert_to_numpy=True, show_progress_bar=False)

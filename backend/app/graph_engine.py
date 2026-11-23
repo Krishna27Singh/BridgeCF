@@ -1,13 +1,11 @@
 import ctypes
 import logging
-import os
 from pathlib import Path
 from typing import Dict, Iterable, List, Set
 
 import requests
 
 from . import db
-
 
 LOGGER = logging.getLogger(__name__)
 engine = None
@@ -38,7 +36,11 @@ def _load_native_engine() -> bool:
         engine = library
         return True
     except (OSError, AttributeError) as exc:
-        LOGGER.warning("C++ graph engine unavailable at %s: %s. Using Python BFS fallback.", engine_path, exc)
+        LOGGER.warning(
+            "C++ graph engine unavailable at %s: %s. Using Python BFS fallback.",
+            engine_path,
+            exc,
+        )
         engine = None
         return False
 
@@ -50,7 +52,10 @@ def _initialize_dynamic_graph() -> None:
     CONCEPT_NAMES = {}
 
     if not db.DB_PATH.exists():
-        LOGGER.warning("SQLite knowledge base missing at %s. Graph engine will have no mappings.", db.DB_PATH)
+        LOGGER.warning(
+            "SQLite knowledge base missing at %s. Graph engine will have no mappings.",
+            db.DB_PATH,
+        )
         return
 
     connection = db.connect()
@@ -107,10 +112,6 @@ def _initialize_dynamic_graph() -> None:
                     engine.add_edge(CONCEPT_IDS[tag], target)
 
 
-_load_native_engine()
-_initialize_dynamic_graph()
-
-
 def get_user_solved_problems(handle: str) -> List[str]:
     url = "https://codeforces.com/api/user.status"
     try:
@@ -149,7 +150,8 @@ def _python_bfs(solved_problem_ids: Iterable[str], target_problem_id: str) -> Li
         solved_values = list(solved_problem_ids)
         if solved_values:
             solved_rows = connection.execute(
-                f"SELECT problem_id, tags_json FROM problems WHERE problem_id IN ({solved_placeholders})",
+                "SELECT problem_id, tags_json FROM problems "
+                f"WHERE problem_id IN ({solved_placeholders})",
                 solved_values,
             ).fetchall()
         else:
