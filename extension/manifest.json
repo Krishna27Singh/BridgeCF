@@ -25,8 +25,13 @@
         "*://codeforces.com/contest/*/problem/*",
         "*://codeforces.com/gym/*/problem/*"
       ],
-      "js": ["content.js"],
-      "css": ["styles.css"]
+      "js": ["content.js"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["styles.css"],
+      "matches": ["*://codeforces.com/*"]
     }
   ]
 }

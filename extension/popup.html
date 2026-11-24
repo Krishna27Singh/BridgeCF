@@ -1,34 +1,68 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>BridgeCF</title>
     <style>
-      :root { color-scheme: dark; font-family: system-ui, sans-serif; }
-      body { width: 340px; margin: 0; padding: 16px; background: #111827; color: #f9fafb; }
-      h1 { margin: 0 0 14px; font-size: 18px; }
-      label { display: block; margin-top: 10px; font-size: 12px; color: #cbd5e1; }
-      input { box-sizing: border-box; width: 100%; margin-top: 5px; padding: 9px; border: 1px solid #475569; border-radius: 6px; background: #1e293b; color: white; }
-      .actions { display: flex; gap: 8px; margin-top: 14px; }
-      button { flex: 1; border: 0; border-radius: 6px; padding: 9px; background: #2563eb; color: white; cursor: pointer; }
-      #testConnection { background: #334155; }
-      #status { min-height: 18px; margin-top: 10px; color: #93c5fd; font-size: 12px; }
+      :root {
+        color-scheme: light;
+        font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+        color: #18181b;
+        background: #ffffff;
+      }
+      * { box-sizing: border-box; }
+      body { width: 300px; margin: 0; padding: 16px; }
+      header { display: flex; align-items: center; gap: 9px; margin-bottom: 17px; }
+      .mark { display: grid; width: 25px; height: 25px; place-items: center; border: 1px solid #e4e4e7; border-radius: 7px; color: #52525b; font-size: 12px; font-weight: 700; }
+      h1 { margin: 0; font-size: 14px; font-weight: 650; letter-spacing: -0.02em; }
+      .subtitle { margin: 2px 0 0; color: #71717a; font-size: 11px; }
+      label { display: block; margin-bottom: 6px; color: #52525b; font-size: 11px; font-weight: 550; }
+      input { width: 100%; height: 36px; padding: 0 10px; border: 1px solid #e4e4e7; border-radius: 6px; outline: none; background: #ffffff; color: #18181b; font: inherit; font-size: 12px; }
+      input:focus { border-color: #a1a1aa; box-shadow: 0 0 0 2px rgba(24, 24, 27, 0.06); }
+      button { font: inherit; cursor: pointer; }
+      #save { width: 100%; height: 36px; margin-top: 11px; border: 1px solid #18181b; border-radius: 6px; background: #18181b; color: #ffffff; font-size: 12px; font-weight: 600; }
+      #save:hover { background: #27272a; }
+      details { margin-top: 14px; border-top: 1px solid #e4e4e7; }
+      summary { display: flex; min-height: 38px; align-items: center; justify-content: space-between; color: #52525b; cursor: pointer; font-size: 11px; font-weight: 550; list-style: none; }
+      summary::-webkit-details-marker { display: none; }
+      summary::after { content: "+"; color: #71717a; font-size: 15px; font-weight: 400; }
+      details[open] summary::after { content: "−"; }
+      .advanced-content { padding-bottom: 2px; }
+      .advanced-content label { margin-top: 2px; }
+      #testConnection { width: 100%; height: 32px; margin-top: 9px; border: 1px solid #e4e4e7; border-radius: 6px; background: #f8f9fa; color: #52525b; font-size: 11px; font-weight: 550; }
+      #testConnection:hover { background: #f4f4f5; }
+      #status { display: flex; min-height: 18px; align-items: center; gap: 7px; margin-top: 12px; color: #71717a; font-size: 11px; }
+      .status-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #a1a1aa; }
+      #status[data-state="success"] .status-dot { background: #16a34a; }
+      #status[data-state="pending"] .status-dot { background: #d97706; }
+      #status[data-state="error"] .status-dot { background: #dc2626; }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; } }
     </style>
   </head>
   <body>
-    <h1>BridgeCF Settings</h1>
-    <label>Codeforces handle
-      <input id="userHandle" type="text" placeholder="tourist">
-    </label>
-    <label>API base URL
-      <input id="apiBaseUrl" type="url" placeholder="https://bridgecf-api.onrender.com">
-    </label>
-    <div class="actions">
-      <button id="save" type="button">Save</button>
-      <button id="testConnection" type="button">Test Connection</button>
+    <header>
+      <span class="mark" aria-hidden="true">B</span>
+      <div>
+        <h1>BridgeCF</h1>
+        <p class="subtitle">Adaptive hints for Codeforces</p>
+      </div>
+    </header>
+    <label for="userHandle">Codeforces handle</label>
+    <input id="userHandle" type="text" placeholder="e.g. tourist" autocomplete="off">
+    <button id="save" type="button">Save</button>
+    <details>
+      <summary>Advanced settings</summary>
+      <div class="advanced-content">
+        <label for="apiBaseUrl">API Base URL</label>
+        <input id="apiBaseUrl" type="url" placeholder="https://bridgecf-api.onrender.com">
+        <button id="testConnection" type="button">Test connection</button>
+      </div>
+    </details>
+    <div id="status" data-state="idle" role="status" aria-live="polite">
+      <span class="status-dot" aria-hidden="true"></span>
+      <span id="statusText">Ready when you are</span>
     </div>
-    <div id="status" aria-live="polite"></div>
     <script src="popup.js"></script>
   </body>
 </html>
