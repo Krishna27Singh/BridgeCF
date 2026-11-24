@@ -2,19 +2,18 @@
 
 | Metric | Vector-Only | BridgeCF Hybrid |
 |---|---:|---:|
-| Recall@3 | 0.880 | 0.980 |
-| Recall@5 | 0.960 | 0.980 |
-| MRR | 0.826 | 0.980 |
-| Pedagogical Difficulty Hit Rate | 1.000 | 1.000 |
+| Recall@3 | 0.380 | 1.000 |
+| Recall@5 | 0.380 | 1.000 |
+| MRR | 0.458 | 0.690 |
+| Pedagogical Difficulty Hit Rate | 0.333 | 0.747 |
 
 ## Live LLM Configuration
-- Provider: `openai_compat`
-- LLM sample: `15`
+- Provider: `offline`
+- LLM sample: `all 50`
 
 ## Latencies
-- Graph BFS p50/p95 ms: 1.0331ms/6.2973ms
-- Hybrid retrieval p50/p95 ms: 35.5187ms/70.3442ms
-- Codeforces network fetch ms: 1901.9210ms
+- Graph BFS p50/p95 ms: 0.083us/0.333us
+- Hybrid retrieval p50/p95 ms: 0.0123ms/0.0163ms
 
 ## LLM / Guardrails
 - json_schema_pass_rate: 1.000
