@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/Krishna27Singh/BridgeCF/compare/v0.2.0...v0.3.0) (2026-11-24)
+
+
+### Features
+
+* **deploy:** decouple offline indexing from runtime container for 51… ([d5b97ef](https://github.com/Krishna27Singh/BridgeCF/commit/d5b97ef6e62ecb3948f403cb0dbb86bd06cd9ae5))
+* **deploy:** decouple offline indexing from runtime container for 512MB Render serving ([fb68d48](https://github.com/Krishna27Singh/BridgeCF/commit/fb68d484b3f53276b1ba2eb30fa272ece11fac80))
+
+
+### Bug Fixes
+
+* **backend:** ground hints in problem statements, fix live eval recal… ([faa7d0d](https://github.com/Krishna27Singh/BridgeCF/commit/faa7d0dcf6997db0279f99b9d488d2fcc658d78f))
+* **backend:** ground hints in problem statements, fix live eval recall, and isolate C++ graph timing ([40bec97](https://github.com/Krishna27Singh/BridgeCF/commit/40bec97cad52c4607923878902138fa70031b2d6))
+
 ## [0.2.0](https://github.com/Krishna27Singh/BridgeCF/compare/v0.1.0...v0.2.0) (2026-11-23)
 
 
