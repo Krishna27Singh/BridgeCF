@@ -1,9 +1,9 @@
 # BridgeCF — Adaptive Codeforces Hint Engine
 
 [![CI](https://github.com/Krishna27Singh/BridgeCF/actions/workflows/ci.yml/badge.svg)](https://github.com/Krishna27Singh/BridgeCF/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/Krishna27Singh/BridgeCF)](https://github.com/Krishna27Singh/BridgeCF/releases)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![C++17](https://img.shields.io/badge/C++-17-00599C.svg)](https://isocpp.org/)
+[![Latest Release](https://img.shields.io/github/v/release/Krishna27Singh/BridgeCF)](https://github.com/Krishna27Singh/BridgeCF/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Open-18181b)](https://bridgecf-api.onrender.com/demo)
 
 BridgeCF diagnoses why a competitive programmer is stuck on a Codeforces problem, retrieves unsolved stepping-stone ("bridge") problems calibrated to their skill gap, and delivers progressive 3-stage Socratic hints without spoiling the solution.
 
@@ -280,6 +280,15 @@ gcloud run deploy bridgecf-api \
   --timeout 300 \
   --set-env-vars "LLM_PROVIDER=openai_compat,OPENAI_API_KEY=YOUR_KEY,OPENAI_BASE_URL=[https://api.groq.com/openai/v1,OPENAI_MODEL=openai/gpt-oss-20b,BOOTSTRAP_LIMIT=3000](https://api.groq.com/openai/v1,OPENAI_MODEL=openai/gpt-oss-20b,BOOTSTRAP_LIMIT=3000)"
 ```
+
+---
+
+## Documentation & Community
+
+- [Contributing guide](CONTRIBUTING.md) — local setup, checks, branch/commit conventions, and pull request checklist.
+- [Public roadmap](ROADMAP.md) — planned platform, product, and reliability work.
+- [Security policy](SECURITY.md) — supported versions, data handling, and private vulnerability reporting.
+- [Code of Conduct](CODE_OF_CONDUCT.md) — community expectations and enforcement.
 
 ---
 

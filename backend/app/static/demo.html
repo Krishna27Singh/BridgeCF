@@ -3,64 +3,275 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>BridgeCF Demo</title>
+    <meta name="theme-color" content="#0f1115" />
+    <title>BridgeCF — Adaptive Codeforces Hints</title>
     <style>
-      body { margin: 0; font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
-      main { max-width: 760px; margin: 10vh auto; padding: 2rem; }
-      h1 { color: #67e8f9; }
-      form { display: grid; gap: 1rem; background: #1e293b; padding: 1.5rem; border-radius: 12px; }
-      label { display: grid; gap: .4rem; font-weight: 600; }
-      input { padding: .75rem; border: 1px solid #475569; border-radius: 8px; background: #0f172a; color: white; }
-      textarea { padding: .75rem; border: 1px solid #475569; border-radius: 8px; background: #0f172a; color: white; resize: vertical; }
-      button { padding: .75rem 1rem; border: 0; border-radius: 8px; background: #06b6d4; color: #082f49; font-weight: 700; cursor: pointer; }
-      pre { min-height: 6rem; padding: 1rem; border-radius: 8px; background: #020617; white-space: pre-wrap; }
-      .grid { display: grid; gap: 1rem; margin-top: 1rem; }
-      .card { border: 1px solid #334155; border-radius: 10px; padding: 1rem; background: #1e293b; }
-      .bar { height: 8px; margin: 5px 0; border-radius: 99px; background: #334155; overflow: hidden; }
-      .bar span { display: block; height: 100%; background: #22d3ee; }
-      .hint-card button { width: 100%; margin-top: 6px; }
-      .hidden { display: none; }
-      #health { color: #86efac; }
+      :root {
+        color-scheme: dark;
+        font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+        background: #0f1115;
+        color: #f4f4f5;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        --page: #0f1115;
+        --surface: #16181d;
+        --surface-raised: #1b1d22;
+        --border: #27272a;
+        --ink: #f4f4f5;
+        --secondary: #a1a1aa;
+        --muted: #71717a;
+        --accent: #c4b5fd;
+        --green: #4ade80;
+        --amber: #fbbf24;
+        --red: #f87171;
+        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      * { box-sizing: border-box; }
+      body { min-width: 320px; margin: 0; background: var(--page); color: var(--ink); font-size: 14px; line-height: 1.55; }
+      main { width: min(100% - 32px, 760px); margin: 54px auto 80px; }
+      .brand { display: flex; align-items: center; gap: 10px; }
+      .mark { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid var(--border); border-radius: 8px; color: var(--secondary); font-size: 13px; font-weight: 700; }
+      h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.025em; }
+      .lede { max-width: 570px; margin: 10px 0 24px; color: var(--secondary); }
+      .surface { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+      form { display: grid; gap: 15px; padding: 18px; }
+      .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+      label { display: grid; gap: 6px; color: var(--secondary); font-size: 12px; font-weight: 550; }
+      input, textarea { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; outline: none; background: #111317; color: var(--ink); font: inherit; font-size: 13px; }
+      input { height: 38px; font-family: var(--mono); }
+      textarea { min-height: 140px; resize: vertical; line-height: 1.55; }
+      input:focus, textarea:focus { border-color: #71717a; box-shadow: 0 0 0 2px rgb(161 161 170 / 10%); }
+      input::placeholder, textarea::placeholder { color: #62626b; }
+      .helper { margin: -9px 0 0; color: var(--muted); font-size: 11px; }
+      button { min-height: 38px; padding: 0 13px; border: 1px solid #fafafa; border-radius: 6px; background: #fafafa; color: #111214; cursor: pointer; font: inherit; font-size: 12px; font-weight: 650; transition: background 120ms ease, transform 120ms ease; }
+      button:hover { background: #e4e4e7; }
+      button:active { transform: translateY(1px); }
+      button:disabled { cursor: wait; opacity: 0.72; }
+      .form-actions { display: flex; align-items: center; gap: 12px; }
+      #health { display: inline-flex; align-items: center; gap: 7px; color: var(--secondary); font-size: 11px; }
+      .health-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+      #health[data-state="healthy"] .health-dot { background: var(--green); }
+      #health[data-state="degraded"] .health-dot { background: var(--amber); }
+      #health[data-state="unavailable"] .health-dot { background: var(--red); }
+      #result { display: grid; gap: 12px; margin-top: 16px; }
+      .result-card { padding: 15px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+      .result-card h2 { margin: 0 0 10px; color: var(--secondary); font-size: 12px; font-weight: 650; }
+      .concepts { display: flex; flex-wrap: wrap; gap: 6px; }
+      .concept { padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-raised); color: var(--secondary); font-size: 11px; }
+      .bridge-list { display: grid; gap: 7px; }
+      .bridge-row, .bridge-row:visited { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 10px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: #131519; color: var(--ink); text-decoration: none; transition: border-color 120ms ease, background 120ms ease; }
+      .bridge-row:hover, .bridge-row:focus-visible { border-color: #52525b; background: var(--surface-raised); color: var(--ink); outline: none; }
+      .bridge-id { color: var(--accent); font-family: var(--mono); font-size: 12px; font-weight: 650; }
+      .bridge-open { display: block; margin-top: 2px; color: var(--secondary); font-size: 10px; }
+      .bridge-meta { display: flex; align-items: flex-end; flex-direction: column; gap: 4px; }
+      .rating, .match { color: var(--secondary); font-family: var(--mono); font-size: 10px; }
+      .rating { padding: 1px 5px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface-raised); }
+      .score-line { grid-column: 1 / -1; color: var(--muted); font-size: 10px; }
+      .hint-row { border-top: 1px solid var(--border); }
+      .hint-row:last-child { border-bottom: 1px solid var(--border); }
+      .hint-row summary { display: flex; min-height: 39px; align-items: center; gap: 9px; color: var(--ink); cursor: pointer; font-size: 12px; font-weight: 550; list-style: none; }
+      .hint-row summary::-webkit-details-marker { display: none; }
+      .hint-number { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+      .chevron { width: 7px; height: 7px; margin-left: auto; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg) translateY(-2px); transition: transform 120ms ease; }
+      .hint-row[open] .chevron { transform: rotate(225deg) translate(-1px, -1px); }
+      .hint-text, .rationale-text { margin: 0; padding: 0 3px 12px 26px; color: var(--secondary); font-size: 13px; line-height: 1.65; white-space: pre-wrap; }
+      .rationale { padding: 13px 15px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+      .rationale h2 { margin: 0 0 5px; color: var(--secondary); font-size: 12px; }
+      .rationale-text { padding: 0; }
+      .telemetry { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+      .loading { display: flex; align-items: center; gap: 10px; color: var(--secondary); }
+      .spinner { width: 14px; height: 14px; border: 1.5px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 700ms linear infinite; }
+      .error { color: #fda29b; }
+      .empty { color: var(--muted); font-size: 12px; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @media (max-width: 560px) {
+        main { margin-top: 28px; }
+        .form-row { grid-template-columns: 1fr; }
+        form { padding: 14px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+      }
     </style>
   </head>
   <body>
     <main>
-      <h1>BridgeCF Hint Engine</h1>
-      <p>Request a structured hint from the running API.</p>
-      <form id="hint-form">
-        <label>Problem ID <input id="problem" name="problem" value="1890_A" required /></label>
-        <label>Codeforces handle <input id="handle" name="handle" value="tourist" /></label>
-        <label>Problem Statement (optional — auto-fetched if blank)
+      <header class="brand">
+        <span class="mark" aria-hidden="true">B</span>
+        <h1>BridgeCF</h1>
+      </header>
+      <p class="lede">A measured hint for the problem you’re working on. BridgeCF combines your public Codeforces history with concept-aware retrieval to suggest a useful next step.</p>
+      <form id="hint-form" class="surface">
+        <div class="form-row">
+          <label for="problem">Problem ID
+            <input id="problem" name="problem" value="1890_A" required />
+          </label>
+          <label for="handle">Codeforces handle
+            <input id="handle" name="handle" value="tourist" autocomplete="off" />
+          </label>
+        </div>
+        <label for="statement">Problem Statement (optional — auto-fetched if blank)
           <textarea id="statement" rows="7" placeholder="Paste the problem statement, or leave blank for auto-fetch"></textarea>
         </label>
-        <button type="submit">Generate hint</button>
+        <p class="helper">Tip: Paste the problem statement for grounded hints — Codeforces may block server-side auto-fetch.</p>
+        <div class="form-actions">
+          <button id="submit-hint" type="submit">Generate hint</button>
+          <div id="health" data-state="checking" role="status" aria-live="polite">
+            <span class="health-dot" aria-hidden="true"></span>
+            <span id="health-text">Ready status: checking...</span>
+          </div>
+        </div>
       </form>
-      <div id="health">Ready status: checking...</div>
-      <div id="result" class="grid"></div>
+      <div id="result" aria-live="polite"></div>
     </main>
     <script>
+      const healthElement = document.getElementById("health");
+      const healthText = document.getElementById("health-text");
+      const resultElement = document.getElementById("result");
+      const submitButton = document.getElementById("submit-hint");
+
+      function makeElement(tag, className, text) {
+        const element = document.createElement(tag);
+        if (className) element.className = className;
+        if (text !== undefined) element.textContent = text;
+        return element;
+      }
+
       async function refreshHealth() {
         try {
           const response = await fetch("/ready");
           const data = await response.json();
-          document.getElementById("health").textContent =
-            `Ready status: ${data.ready ? "healthy" : "degraded"}`;
+          const state = data.ready ? "healthy" : "degraded";
+          healthElement.dataset.state = state;
+          healthText.textContent = `Ready status: ${state}`;
         } catch (_) {
-          document.getElementById("health").textContent = "Ready status: unavailable";
+          healthElement.dataset.state = "unavailable";
+          healthText.textContent = "Ready status: unavailable";
         }
       }
       refreshHealth();
 
-      function scoreBar(label, value) {
-        const percent = Math.max(0, Math.min(100, Number(value) * 100));
-        return `<div>${label}: ${Number(value).toFixed(3)}
-          <div class="bar"><span style="width:${percent}%"></span></div></div>`;
+      function formatMs(value) {
+        const number = Number(value);
+        return Number.isFinite(number) ? `${number.toFixed(2)}ms` : "—";
+      }
+
+      function appendHint(parent, number, title, text, openByDefault = false) {
+        if (!String(text || "").trim()) return;
+        const details = makeElement("details", "hint-row");
+        if (openByDefault) details.open = true;
+        const summary = makeElement("summary");
+        summary.append(
+          makeElement("span", "hint-number", number),
+          makeElement("span", "hint-number", "·"),
+          makeElement("span", "", title),
+          makeElement("span", "chevron"),
+        );
+        details.append(summary, makeElement("p", "hint-text", text));
+        parent.appendChild(details);
+      }
+
+      function renderBridge(item) {
+        const problem = item.problem || {};
+        const match = String(problem.problem_id || "").match(/^(\d+)_([A-Za-z0-9]+)$/);
+        if (!match) return null;
+
+        const link = makeElement("a", "bridge-row");
+        link.href = `https://codeforces.com/problemset/problem/${match[1]}/${match[2]}`;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+
+        const identity = makeElement("span");
+        identity.append(
+          makeElement("strong", "bridge-id", problem.problem_id),
+          makeElement("span", "bridge-open", "Open problem ↗"),
+        );
+        const meta = makeElement("span", "bridge-meta");
+        if (problem.rating !== null && problem.rating !== undefined) {
+          meta.appendChild(makeElement("span", "rating", String(problem.rating)));
+        }
+        const score = Math.max(0, Math.min(1, Number(item.final_score) || 0));
+        meta.appendChild(makeElement("span", "match", `${Math.round(score * 100)}% match`));
+
+        const scores = makeElement(
+          "span",
+          "score-line",
+          `semantic ${Number(item.semantic_score || 0).toFixed(2)} · concept ${Number(item.concept_score || 0).toFixed(2)} · difficulty ${Number(item.difficulty_score || 0).toFixed(2)} · final ${score.toFixed(2)}`,
+        );
+        link.append(identity, meta, scores);
+        return link;
+      }
+
+      function renderHint(data) {
+        resultElement.replaceChildren();
+
+        const conceptsCard = makeElement("section", "result-card");
+        conceptsCard.appendChild(makeElement("h2", "", "Bottleneck concepts"));
+        const concepts = makeElement("div", "concepts");
+        const missing = data.missing_concepts || [];
+        if (missing.length) {
+          missing.forEach((concept) => concepts.appendChild(makeElement("span", "concept", concept)));
+        } else {
+          concepts.appendChild(makeElement("span", "empty", "No specific concept flagged"));
+        }
+        conceptsCard.appendChild(concepts);
+        resultElement.appendChild(conceptsCard);
+
+        const bridgesCard = makeElement("section", "result-card");
+        bridgesCard.appendChild(makeElement("h2", "", "Bridge problems"));
+        const bridgeList = makeElement("div", "bridge-list");
+        (data.bridge_problems || []).forEach((item) => {
+          const bridge = renderBridge(item);
+          if (bridge) bridgeList.appendChild(bridge);
+        });
+        if (!bridgeList.childElementCount) {
+          bridgeList.appendChild(makeElement("p", "empty", "No bridge problem found."));
+        }
+        bridgesCard.appendChild(bridgeList);
+        resultElement.appendChild(bridgesCard);
+
+        const hintCard = makeElement("section", "result-card");
+        hintCard.appendChild(makeElement("h2", "", "Your hints"));
+        const hint = data.hint || {};
+        appendHint(hintCard, "01", "Conceptual nudge", hint.conceptual_nudge, true);
+        appendHint(hintCard, "02", "Strategy", hint.strategy_hint);
+        appendHint(hintCard, "03", "Complexity", hint.complexity_nudge);
+        if (hintCard.querySelector(".hint-row")) resultElement.appendChild(hintCard);
+
+        const rationale = String(hint.bridge_rationale || "").trim();
+        if (rationale) {
+          const rationaleCard = makeElement("section", "rationale");
+          rationaleCard.append(
+            makeElement("h2", "", "Why this bridge?"),
+            makeElement("p", "rationale-text", rationale),
+          );
+          resultElement.appendChild(rationaleCard);
+        }
+
+        const timings = data.timings_ms || {};
+        const telemetry = [
+          `C++ ${formatMs(timings.graph_ms)}`,
+          `CF fetch ${formatMs(timings.cf_fetch_ms)}`,
+          `Retrieval ${formatMs(timings.retrieval_ms)}`,
+          `LLM ${formatMs(timings.llm_ms)}`,
+          `Total ${formatMs(timings.total_ms)}`,
+          `Provider ${data.provider || "unknown"}${data.fallback_used ? " · fallback" : ""}`,
+        ];
+        resultElement.appendChild(makeElement("footer", "telemetry", telemetry.join(" · ")));
       }
 
       document.getElementById("hint-form").addEventListener("submit", async (event) => {
         event.preventDefault();
-        const result = document.getElementById("result");
-        result.innerHTML = '<div class="card">Loading...</div>';
+        submitButton.disabled = true;
+        submitButton.textContent = "Working…";
+        resultElement.replaceChildren();
+        const loading = makeElement("div", "result-card loading");
+        loading.append(
+          makeElement("span", "spinner"),
+          makeElement("span", "", "Finding a useful next step…"),
+        );
+        resultElement.appendChild(loading);
+
         try {
           const response = await fetch("/api/hint", {
             method: "POST",
@@ -69,43 +280,20 @@
               problem_id: document.getElementById("problem").value,
               user_handle: document.getElementById("handle").value,
               max_bridges: 3,
-              problem_statement: document.getElementById("statement").value.trim() || null
-            })
+              problem_statement: document.getElementById("statement").value.trim() || null,
+            }),
           });
           const data = await response.json();
-          if (!response.ok) throw new Error(JSON.stringify(data));
-          const concepts = (data.missing_concepts || []).join(", ") || "None identified";
-          const bridges = (data.bridge_problems || []).map((item) => `
-            <div class="card">
-              <a href="${item.problem.url}" target="_blank" rel="noopener">
-                ${item.problem.problem_id} · ${item.problem.rating || "Unrated"}
-              </a>
-              ${scoreBar("semantic", item.semantic_score)}
-              ${scoreBar("concept", item.concept_score)}
-              ${scoreBar("difficulty", item.difficulty_score)}
-              ${scoreBar("final", item.final_score)}
-            </div>`).join("");
-          const hint = data.hint || {};
-          const timing = data.timings_ms || {};
-          result.innerHTML = `
-            <div class="card"><strong>Missing concepts</strong><br>${concepts}</div>
-            <div class="grid">${bridges}</div>
-            <div class="card hint-card">
-              <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden')">Hint 1: Conceptual Nudge</button>
-              <p class="hidden">${hint.conceptual_nudge || ""}</p>
-              <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden')">Hint 2: Strategy Hint</button>
-              <p class="hidden">${hint.strategy_hint || ""}</p>
-              <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden')">Hint 3: Complexity Nudge</button>
-              <p class="hidden">${hint.complexity_nudge || ""}</p>
-              <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden')">Why This Bridge Problem</button>
-              <p class="hidden">${hint.bridge_rationale || ""}</p>
-            </div>
-            <div class="card">graph ${timing.graph_ms} ms · CF fetch ${timing.cf_fetch_ms} ms · retrieval ${timing.retrieval_ms} ms ·
-              llm ${timing.llm_ms} ms · total ${timing.total_ms} ms ·
-              provider ${data.provider}${data.fallback_used ? " (fallback)" : ""}</div>`;
-          refreshHealth();
+          if (!response.ok) {
+            throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data));
+          }
+          renderHint(data);
+          await refreshHealth();
         } catch (error) {
-          result.innerHTML = `<div class="card">${String(error)}</div>`;
+          resultElement.replaceChildren(makeElement("div", "result-card error", error.message || "The hint request failed."));
+        } finally {
+          submitButton.disabled = false;
+          submitButton.textContent = "Generate hint";
         }
       });
     </script>

@@ -1,0 +1,32 @@
+name: Feature request
+description: Propose an improvement or new capability.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Area or platform
+      options:
+        - Codeforces
+        - AtCoder
+        - CodeChef
+        - Backend
+        - Extension
+    validations:
+      required: true
+  - type: textarea
+    id: problem_statement
+    attributes:
+      label: Problem statement or user need
+      description: What user problem should this feature solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior you would like and any alternatives considered.
+    validations:
+      required: true

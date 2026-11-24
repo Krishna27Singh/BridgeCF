@@ -260,7 +260,7 @@ function renderHint(data, output, shadow) {
   ].filter(([, , text]) => String(text || "").trim());
   const hintMarkup = hintRows.map(([number, label, text], index) => `
     <details class="bridgecf-hint-row"${index === 0 ? " open" : ""}>
-      <summary><span class="bridgecf-hint-number">${number}</span><span>${label}</span><span class="bridgecf-chevron" aria-hidden="true"></span></summary>
+      <summary><span class="bridgecf-hint-number">${number}</span><span class="bridgecf-hint-number" aria-hidden="true">·</span><span>${label}</span><span class="bridgecf-chevron" aria-hidden="true"></span></summary>
       <p>${escapeHtml(text)}</p>
     </details>`).join("");
   const rationale = String(hint.bridge_rationale || "").trim();

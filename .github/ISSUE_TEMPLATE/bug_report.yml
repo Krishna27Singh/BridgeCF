@@ -1,0 +1,51 @@
+name: Bug report
+description: Report a reproducible problem in BridgeCF.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Thank you for taking the time to report a bug. Please do not include passwords, tokens, or private submission data.
+  - type: input
+    id: environment
+    attributes:
+      label: Environment and browser
+      description: Include OS, browser/version, and whether you used the live or local backend.
+      placeholder: macOS 15, Chrome 130, live backend
+    validations:
+      required: true
+  - type: input
+    id: problem_id
+    attributes:
+      label: Codeforces problem ID
+      placeholder: 1890_A
+    validations:
+      required: true
+  - type: input
+    id: handle
+    attributes:
+      label: Codeforces handle (optional)
+      description: Include only if it is needed to reproduce the issue.
+    validations:
+      required: false
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide the smallest sequence of actions that reproduces the problem.
+      placeholder: "1. Open ...\n2. Click ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
