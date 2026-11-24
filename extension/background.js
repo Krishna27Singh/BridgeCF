@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE = "http://127.0.0.1:8000";
+const DEFAULT_API_BASE = "https://bridgecf-api.onrender.com";
 
 async function getApiBaseUrl() {
   const stored = await chrome.storage.sync.get(["apiBaseUrl"]);

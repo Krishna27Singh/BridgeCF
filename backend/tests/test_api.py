@@ -136,6 +136,17 @@ def test_extension_manifest_and_files():
     assert manifest["manifest_version"] == 3
     assert manifest["background"]["service_worker"] == "background.js"
     assert manifest["action"]["default_popup"] == "popup.html"
+    assert (
+        "https://bridgecf-api.onrender.com/*" in manifest["host_permissions"]
+        or "https://*/*" in manifest["host_permissions"]
+    )
+    popup_html = (root / "extension" / "popup.html").read_text()
+    popup_js = (root / "extension" / "popup.js").read_text()
+    background_js = (root / "extension" / "background.js").read_text()
+    assert 'id="apiBaseUrl" type="url"' in popup_html
+    assert "https://bridgecf-api.onrender.com" in popup_html
+    assert "https://bridgecf-api.onrender.com" in popup_js
+    assert "https://bridgecf-api.onrender.com" in background_js
     for relative in (
         "background.js",
         "content.js",
