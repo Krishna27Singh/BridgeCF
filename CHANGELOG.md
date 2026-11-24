@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/Krishna27Singh/BridgeCF/compare/v0.3.0...v0.4.0) (2026-11-24)
+
+
+### Features
+
+* **extension:** redesign sidebar and popup with Shadow DOM isolation and subtle adaptive UI ([5a19149](https://github.com/Krishna27Singh/BridgeCF/commit/5a19149df7801e8ee246c131b234a4e3ecbb6bf9))
+* **extension:** redesign sidebar and popup with Shadow DOM isolation… ([6f8eb0c](https://github.com/Krishna27Singh/BridgeCF/commit/6f8eb0c267a32dd20dd3c6ebfe133a803e749734))
+
 ## [0.3.0](https://github.com/Krishna27Singh/BridgeCF/compare/v0.2.0...v0.3.0) (2026-11-24)
 
 
