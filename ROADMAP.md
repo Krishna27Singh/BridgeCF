@@ -2,12 +2,15 @@
 
 This roadmap describes possible directions, not release commitments. Ideas and implementation proposals are welcome.
 
+## Shipped
+
+- The Codeforces catalog and FAISS index refresh every three days through [`.github/workflows/refresh-index.yml`](.github/workflows/refresh-index.yml), with validated snapshots published to the floating `index-latest` release.
+
 ## Phase 1: Deeper Codeforces Mastery
 
 - Add contest-safe auto-lock during live rounds.
 - Use wrong-answer and time-limit-exceeded submissions to tailor debugging hints.
 - Visualize the interactive prerequisite DAG.
-- Refresh the indexed Codeforces catalog automatically each week with GitHub Actions.
 
 ## Phase 2: Multi-Platform Expansion — AtCoder & CodeChef
 

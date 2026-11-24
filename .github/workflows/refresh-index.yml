@@ -1,0 +1,146 @@
+name: Refresh Codeforces Index
+
+on:
+  schedule:
+    - cron: '0 2 */3 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-index
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install CPU-only indexing dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install -r backend/requirements.txt
+
+      - name: Build latest Codeforces catalog and FAISS index
+        working-directory: backend
+        run: PYTHONPATH=. python -m app.scripts.build_knowledge_base
+
+      - name: Verify SQLite and FAISS integrity
+        id: verify
+        run: |
+          python - <<'PY'
+          import os
+          import sqlite3
+          from pathlib import Path
+
+          import faiss
+
+          data_dir = Path("backend/data")
+          database_path = data_dir / "bridgecf.db"
+          index_path = data_dir / "vector_database.index"
+          for path in (database_path, index_path):
+              if not path.is_file() or path.stat().st_size == 0:
+                  raise SystemExit(f"Missing or empty index asset: {path}")
+
+          with sqlite3.connect(database_path) as connection:
+              problem_count = connection.execute(
+                  "SELECT COUNT(*) FROM problems"
+              ).fetchone()[0]
+              indexed_count, unique_faiss_ids = connection.execute(
+                  "SELECT COUNT(faiss_id), COUNT(DISTINCT faiss_id) FROM problems"
+              ).fetchone()
+
+          if problem_count < 10000:
+              raise SystemExit(
+                  f"Catalog is too small to publish: {problem_count} problems (minimum 10000)"
+              )
+          if indexed_count != problem_count or unique_faiss_ids != indexed_count:
+              raise SystemExit(
+                  "SQLite problem/vector cardinality mismatch: "
+                  f"problems={problem_count}, indexed={indexed_count}, "
+                  f"unique_faiss_ids={unique_faiss_ids}"
+              )
+
+          index = faiss.read_index(str(index_path))
+          if index.ntotal != indexed_count:
+              raise SystemExit(
+                  f"FAISS cardinality mismatch: index={index.ntotal}, SQLite={indexed_count}"
+              )
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"problem_count={problem_count}\n")
+              output.write(f"vector_count={index.ntotal}\n")
+          PY
+
+      - name: Package index archive
+        id: package
+        run: |
+          tar -czf bridgecf-index.tar.gz -C backend/data bridgecf.db vector_database.index
+          archive_size="$(du -h bridgecf-index.tar.gz | cut -f1)"
+          echo "archive_size=${archive_size}" >> "$GITHUB_OUTPUT"
+
+      - name: Add snapshot details to job summary
+        env:
+          PROBLEM_COUNT: ${{ steps.verify.outputs.problem_count }}
+          VECTOR_COUNT: ${{ steps.verify.outputs.vector_count }}
+          ARCHIVE_SIZE: ${{ steps.package.outputs.archive_size }}
+        run: |
+          {
+            echo "## BridgeCF index snapshot"
+            echo
+            echo "- Indexed problems: ${PROBLEM_COUNT}"
+            echo "- FAISS vectors: ${VECTOR_COUNT}"
+            echo "- Archive size: ${ARCHIVE_SIZE}"
+            echo "- Archive: \`bridgecf-index.tar.gz\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish floating index release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: index-latest
+        run: |
+          initial_notes="Automated 3-day Codeforces SQLite + FAISS index snapshot for runtime hydration."
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "BridgeCF Index Snapshot (Auto-Updated)" \
+              --notes "$initial_notes" \
+              --latest=false
+          fi
+
+          gh release upload "$RELEASE_TAG" bridgecf-index.tar.gz \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
+          build_timestamp="$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          release_notes="${initial_notes}
+
+          Build timestamp: ${build_timestamp}
+          Indexed problems: ${{ steps.verify.outputs.problem_count }}
+          FAISS vectors: ${{ steps.verify.outputs.vector_count }}"
+          gh release edit "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "BridgeCF Index Snapshot (Auto-Updated)" \
+            --notes "$release_notes" \
+            --latest=false
+
+      - name: Trigger Render deployment when configured
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -n "${RENDER_DEPLOY_HOOK_URL:-}" ]; then
+            curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
+          else
+            echo "RENDER_DEPLOY_HOOK_URL is not configured; skipping deployment hook."
+          fi

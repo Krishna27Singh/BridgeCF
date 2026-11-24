@@ -11,6 +11,8 @@ BridgeCF diagnoses why a competitive programmer is stuck on a Codeforces problem
 
 Instead of acting as a generic LLM wrapper, BridgeCF combines a **C++17 concept-prerequisite DAG engine (`ctypes`)**, **rating-aware user mastery over live Codeforces history**, a **SQLite + 384-dim FAISS hybrid ranker across 11,541 Codeforces problems**, and a **provider-agnostic structured RAG pipeline** with programmatic anti-spoiler guardrails.
 
+The Codeforces catalog and FAISS index are rebuilt every three days by [GitHub Actions](.github/workflows/refresh-index.yml) and published at the stable [`index-latest` release](https://github.com/Krishna27Singh/BridgeCF/releases/download/index-latest/bridgecf-index.tar.gz) URL for runtime hydration.
+
 ---
 
 ## System Architecture
