@@ -12,8 +12,8 @@
 - LLM sample: `all 50`
 
 ## Latencies
-- Graph BFS p50/p95 ms: 0.083us/0.333us
-- Hybrid retrieval p50/p95 ms: 0.0123ms/0.0163ms
+- Graph BFS p50/p95 ms: 0.083us/0.291us
+- Hybrid retrieval p50/p95 ms: 0.0131ms/0.0223ms
 
 ## LLM / Guardrails
 - json_schema_pass_rate: 1.000

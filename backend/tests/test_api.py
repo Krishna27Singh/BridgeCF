@@ -123,6 +123,12 @@ def test_demo_and_root_routes():
     assert demo_response.status_code == 200
     assert "text/html" in demo_response.headers["content-type"]
     assert "BridgeCF" in demo_response.text
+    for element_id in ("hint-form", "problem", "handle", "statement", "health", "result"):
+        assert f'id="{element_id}"' in demo_response.text
+    assert (
+        "Tip: Paste the problem statement for grounded hints — "
+        "Codeforces may block server-side auto-fetch."
+    ) in demo_response.text
 
 
 def test_extension_manifest_and_files():
