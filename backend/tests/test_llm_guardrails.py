@@ -1,7 +1,12 @@
 import requests
 
+from app.config import Settings
 from app.schemas import StructuredHint
-from app.services.llm_service import LLMHintService, detect_spoiler
+from app.services.llm_service import (
+    LLMHintService,
+    _extract_json_object,
+    detect_spoiler,
+)
 
 
 def test_valid_json_parses_to_structured_hint():
@@ -15,6 +20,34 @@ def test_valid_json_parses_to_structured_hint():
         }
     )
     assert hint.concept_tag == "dp"
+
+
+def test_fenced_json_extracts_to_structured_hint():
+    fenced = """```json
+{
+  "concept_tag": "graphs",
+  "conceptual_nudge": "Which edge state must persist?",
+  "strategy_hint": "Track the frontier.",
+  "complexity_nudge": "Use the constraints to choose O(V + E).",
+  "bridge_rationale": "The bridge practices the same traversal."
+}
+```"""
+    hint = StructuredHint.model_validate(
+        __import__("json").loads(_extract_json_object(fenced))
+    )
+    assert hint.concept_tag == "graphs"
+
+
+def test_settings_accepts_comma_separated_cors_origins(monkeypatch):
+    monkeypatch.setenv(
+        "CORS_ORIGINS",
+        "http://127.0.0.1:8000,https://codeforces.com",
+    )
+    settings = Settings()
+    assert settings.cors_origins == [
+        "http://127.0.0.1:8000",
+        "https://codeforces.com",
+    ]
 
 
 def test_spoiler_detector_rejects_code_and_signatures():

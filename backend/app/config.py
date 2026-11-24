@@ -1,9 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import List
+from typing import Annotated, List
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -22,7 +22,10 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
-    cors_origins: List[str] = ["http://localhost:3000"]
+    cors_origins: Annotated[List[str], NoDecode] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:8000",
+    ]
     data_dir: Path = BACKEND_DIR / "data"
     llm_timeout: float = 30.0
     llm_retries: int = 2
@@ -30,8 +33,26 @@ class Settings(BaseSettings):
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors(cls, value):
+        if value is None:
+            return ["http://localhost:3000", "http://127.0.0.1:8000"]
         if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
+            value = value.strip()
+            if not value:
+                return ["http://localhost:3000", "http://127.0.0.1:8000"]
+            if value.startswith("["):
+                import json
+                try:
+                    parsed = json.loads(value)
+                except json.JSONDecodeError:
+                    parsed = None
+                if isinstance(parsed, list):
+                    origins = [str(item).strip() for item in parsed]
+                    return [item for item in origins if item]
+            origins = [item.strip() for item in value.split(",")]
+            return [item for item in origins if item] or [
+                "http://localhost:3000",
+                "http://127.0.0.1:8000",
+            ]
         return value
 
     @field_validator("data_dir", mode="after")

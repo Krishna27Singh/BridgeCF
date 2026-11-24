@@ -57,6 +57,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           problem_id: message.payload.problem_id,
           user_handle: message.payload.user_handle,
           max_bridges: 3,
+          problem_statement: message.payload.problem_statement || null,
         }),
       }),
     );

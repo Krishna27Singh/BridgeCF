@@ -8,6 +8,7 @@ class HintRequest(BaseModel):
     problem_id: str = Field(min_length=1)
     user_handle: str = Field(min_length=1)
     max_bridges: int = Field(default=3, ge=1, le=10)
+    problem_statement: Optional[str] = None
 
     @field_validator("problem_id")
     @classmethod

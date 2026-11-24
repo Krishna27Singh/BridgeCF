@@ -38,13 +38,13 @@ def test_hint_normalization_and_log(monkeypatch, tmp_path):
     monkeypatch.setattr(vector_engine, "INDEX", type("Index", (), {"ntotal": 1})())
     monkeypatch.setattr(
         graph_engine,
-        "get_user_solved_problems",
+        "get_user_solved_records",
         lambda handle: [],
     )
     monkeypatch.setattr(
         graph_engine,
-        "find_missing_concepts",
-        lambda handle, problem_id: ["math"],
+        "find_missing_concepts_rating_aware",
+        lambda solved_records, problem_id: ["math"],
     )
     monkeypatch.setattr(
         vector_engine,

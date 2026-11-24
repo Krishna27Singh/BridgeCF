@@ -71,9 +71,23 @@ function injectHintUI() {
       output.textContent = "A Codeforces handle is required.";
       return;
     }
+    const statementElement = document.querySelector(".problem-statement");
+    let problemStatement = null;
+    if (statementElement) {
+      const clone = statementElement.cloneNode(true);
+      clone.querySelectorAll(".header, .sample-tests, .sample-test").forEach((node) => node.remove());
+      problemStatement = clone.textContent.replace(/\s+/g, " ").trim().slice(0, 2000);
+    }
 
     chrome.runtime.sendMessage(
-      { type: "GET_HINT", payload: { problem_id: problemId, user_handle: handle } },
+      {
+        type: "GET_HINT",
+        payload: {
+          problem_id: problemId,
+          user_handle: handle,
+          problem_statement: problemStatement,
+        },
+      },
       (response) => {
         if (chrome.runtime.lastError) {
           output.textContent = `Extension error: ${chrome.runtime.lastError.message}`;
@@ -136,6 +150,7 @@ function renderHint(data, output, panel) {
     </div>
     <div class="bridgecf-timing">
       graph ${escapeHtml(timings.graph_ms?.toFixed?.(1) ?? timings.graph_ms)} ms ·
+      CF fetch ${escapeHtml(timings.cf_fetch_ms?.toFixed?.(1) ?? timings.cf_fetch_ms)} ms ·
       total ${escapeHtml(timings.total_ms?.toFixed?.(1) ?? timings.total_ms)} ms
     </div>`;
 

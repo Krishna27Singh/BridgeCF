@@ -4,6 +4,8 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import requests
+from bs4 import BeautifulSoup
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,6 +25,38 @@ logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger("bridgecf.api")
 hint_service = LLMHintService(get_settings())
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+STATEMENT_CACHE = {}
+STATEMENT_CACHE_TTL_SECONDS = 300.0
+
+
+def fetch_problem_statement(problem_id: str) -> str | None:
+    now = time.monotonic()
+    cached = STATEMENT_CACHE.get(problem_id)
+    if cached and now - cached[0] < STATEMENT_CACHE_TTL_SECONDS:
+        return cached[1]
+    parts = problem_id.split("_", 1)
+    if len(parts) != 2:
+        return None
+    url = f"https://codeforces.com/problemset/problem/{parts[0]}/{parts[1]}"
+    try:
+        response = requests.get(url, timeout=3)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+        statement = soup.select_one("div.problem-statement")
+        if statement is None:
+            return None
+        header = statement.select_one("div.header")
+        if header:
+            header.decompose()
+        sample = statement.select_one("div.sample-tests")
+        if sample:
+            sample.decompose()
+        text = " ".join(statement.get_text(" ", strip=True).split())
+        text = text[:2000]
+        STATEMENT_CACHE[problem_id] = (now, text)
+        return text
+    except (requests.RequestException, Exception):
+        return None
 
 
 @asynccontextmanager
@@ -135,14 +169,24 @@ def ready():
 
 @app.post("/api/hint", response_model=HintResponse)
 async def generate_hint(request: HintRequest):
-    started = time.perf_counter()
+    started_ns = time.perf_counter_ns()
     target_id = request.problem_id
     handle = request.user_handle
 
-    graph_started = time.perf_counter()
-    missing_concepts = graph_engine.find_missing_concepts(handle, target_id)
-    solved_set = set(graph_engine.get_user_solved_problems(handle))
-    graph_ms = (time.perf_counter() - graph_started) * 1000
+    cf_started_ns = time.perf_counter_ns()
+    solved_records = graph_engine.get_user_solved_records(handle)
+    cf_fetch_ms = (time.perf_counter_ns() - cf_started_ns) / 1_000_000
+    solved_set = {
+        record["problem_id"]
+        for record in solved_records
+    }
+
+    graph_started_ns = time.perf_counter_ns()
+    missing_concepts = graph_engine.find_missing_concepts_rating_aware(
+        solved_records,
+        target_id,
+    )
+    graph_ms = (time.perf_counter_ns() - graph_started_ns) / 1_000_000
 
     retrieval_started = time.perf_counter()
     rankings = vector_engine.find_bridge_problems(
@@ -172,8 +216,22 @@ async def generate_hint(request: HintRequest):
             "name": row["name"],
             "rating": row["rating"],
             "tags": json.loads(row["tags_json"] or "[]"),
-            "statement": row["statement"],
+            "statement": (
+                request.problem_statement
+                or row["statement"]
+                or fetch_problem_statement(target_id)
+            ),
         }
+    else:
+        target_metadata = {
+            "name": target_id,
+            "rating": None,
+            "tags": [],
+            "statement": request.problem_statement or fetch_problem_statement(target_id),
+        }
+
+    if not missing_concepts:
+        missing_concepts = list(target_metadata.get("tags", []))
 
     llm_started = time.perf_counter()
     structured, provider_name, fallback_used = hint_service.generate(
@@ -183,7 +241,7 @@ async def generate_hint(request: HintRequest):
         target_metadata,
     )
     llm_ms = (time.perf_counter() - llm_started) * 1000
-    total_ms = (time.perf_counter() - started) * 1000
+    total_ms = (time.perf_counter_ns() - started_ns) / 1_000_000
 
     connection = db.connect()
     try:
@@ -210,6 +268,7 @@ async def generate_hint(request: HintRequest):
         "fallback_used": fallback_used,
         "timings_ms": {
             "graph_ms": round(graph_ms, 3),
+            "cf_fetch_ms": round(cf_fetch_ms, 3),
             "retrieval_ms": round(retrieval_ms, 3),
             "llm_ms": round(llm_ms, 3),
             "total_ms": round(total_ms, 3),

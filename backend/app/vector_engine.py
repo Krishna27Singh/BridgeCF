@@ -146,6 +146,74 @@ def _cosine_from_faiss(score: float) -> float:
     return max(0.0, min(1.0, float(score)))
 
 
+def find_vector_only_bridge_problems(
+    target_problem_id: str,
+    solved_set: Set[str],
+    top_k: int = 5,
+) -> List[dict]:
+    """Semantic-only baseline using the same wide FAISS candidate recall."""
+    target_row = _problem_row(target_problem_id)
+    if target_row is None:
+        return []
+    target_vector = _get_target_vector(target_problem_id)
+    if target_vector is None or INDEX is None:
+        return []
+
+    with FAISS_LOCK:
+        k = min(max(top_k * 25, 150), INDEX.ntotal)
+        scores, indices = INDEX.search(target_vector, k)
+
+    connection = db.connect()
+    try:
+        rows = connection.execute(
+            "SELECT * FROM problems WHERE faiss_id IS NOT NULL"
+        ).fetchall()
+    finally:
+        connection.close()
+    by_faiss_id = {int(row["faiss_id"]): row for row in rows}
+    ranked = []
+    for rank, faiss_id in enumerate(indices[0]):
+        faiss_id = int(faiss_id)
+        candidate = by_faiss_id.get(faiss_id)
+        if candidate is None:
+            continue
+        candidate_id = candidate["problem_id"]
+        if candidate_id == target_problem_id or candidate_id in solved_set:
+            continue
+        url = (
+            f"https://codeforces.com/problemset/problem/"
+            f"{candidate['contest_id']}/{candidate['problem_index']}"
+        )
+        try:
+            tags = sorted(
+                str(tag)
+                for tag in json.loads(candidate["tags_json"] or "[]")
+            )
+        except json.JSONDecodeError:
+            tags = []
+        ranked.append(
+            {
+                "problem": {
+                    "problem_id": candidate_id,
+                    "url": url,
+                    "rating": candidate["rating"],
+                    "tags": tags,
+                },
+                "semantic_score": round(
+                    _cosine_from_faiss(float(scores[0][rank])), 6
+                ),
+                "concept_score": 0.0,
+                "difficulty_score": 0.0,
+                "final_score": round(
+                    _cosine_from_faiss(float(scores[0][rank])), 6
+                ),
+            }
+        )
+        if len(ranked) >= top_k:
+            break
+    return ranked
+
+
 def find_bridge_problems(
     target_problem_id: str,
     missing_concepts: Iterable[str],
@@ -165,10 +233,15 @@ def find_bridge_problems(
         return []
 
     missing = {str(concept).lower() for concept in missing_concepts}
+    if not missing:
+        missing = {
+            str(tag).lower()
+            for tag in json.loads(target_row["tags_json"] or "[]")
+        }
     target_rating = target_row["rating"]
 
     with FAISS_LOCK:
-        k = min(50, INDEX.ntotal)
+        k = min(max(top_k * 25, 150), INDEX.ntotal)
         scores, indices = INDEX.search(target_vector, k)
 
     candidate_ids = []
@@ -215,15 +288,26 @@ def find_bridge_problems(
             delta = int(target_rating) - int(candidate_rating)
             if 100 <= delta <= 300:
                 difficulty_score = 1.0
-            elif 0 < delta < 100:
-                difficulty_score = 0.5
-            elif 300 < delta <= 500:
-                difficulty_score = 0.5
+            elif 50 <= delta < 100:
+                difficulty_score = 0.65
+            elif 300 < delta <= 400:
+                distance = delta - 300
+                difficulty_score = 0.65 * (1.0 - distance / 100)
+            elif 0 < delta < 50:
+                difficulty_score = 0.35
+            elif delta <= 0:
+                distance = abs(delta)
+                difficulty_score = max(0.05, 0.35 - distance / 1000)
+            else:
+                difficulty_score = max(
+                    0.05,
+                    1.0 - abs(delta - 200) / 300,
+                )
 
         final_score = (
-            0.65 * semantic +
-            0.25 * concept_score +
-            0.10 * difficulty_score
+            0.45 * semantic
+            + 0.35 * concept_score
+            + 0.20 * difficulty_score
         )
         url = (
             f"https://codeforces.com/problemset/problem/"
