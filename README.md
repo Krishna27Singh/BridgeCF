@@ -1,7 +1,7 @@
 # BridgeCF — Adaptive Codeforces Hint Engine
 
 [![CI](https://github.com/Krishna27Singh/BridgeCF/actions/workflows/ci.yml/badge.svg)](https://github.com/Krishna27Singh/BridgeCF/actions/workflows/ci.yml)
-[![Latest Release](https://img.shields.io/github/v/release/Krishna27Singh/BridgeCF)](https://github.com/Krishna27Singh/BridgeCF/releases)
+[![Latest Release](https://img.shields.io/github/v/release/Krishna27Singh/BridgeCF?sort=semver)](https://github.com/Krishna27Singh/BridgeCF/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Open-18181b)](https://bridgecf-api.onrender.com/demo)
 
