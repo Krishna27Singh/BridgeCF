@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+requests
+beautifulsoup4
+faiss-cpu
+numpy
+python-dotenv

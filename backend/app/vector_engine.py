@@ -6,11 +6,10 @@ import threading
 from pathlib import Path
 from typing import Iterable, List, Optional, Set, Tuple
 
-import cloudscraper
 import faiss
 import numpy as np
+import requests
 from bs4 import BeautifulSoup
-from sentence_transformers import SentenceTransformer
 
 from . import db
 
@@ -41,15 +40,21 @@ def load_database() -> None:
 def _load_model():
     global MODEL
     if MODEL is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError:
+            LOGGER.warning(
+                "sentence-transformers is unavailable; JIT text encoding is disabled"
+            )
+            return None
         MODEL = SentenceTransformer(MODEL_NAME)
     return MODEL
 
 
 def scrape_codeforces_problem(contest_id: str, index_letter: str) -> Optional[str]:
     url = f"https://codeforces.com/problemset/problem/{contest_id}/{index_letter}"
-    scraper = cloudscraper.create_scraper()
     try:
-        response = scraper.get(url, timeout=10)
+        response = requests.get(url, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
         statement_div = soup.find("div", class_="problem-statement")
@@ -102,7 +107,10 @@ def jit_ingest_problem(problem_id: str) -> Optional[int]:
         if existing is not None and existing["faiss_id"] is not None:
             return int(existing["faiss_id"])
 
-        vector = _load_model().encode([text], convert_to_numpy=True)[0].astype(np.float32)
+        model = _load_model()
+        if model is None:
+            return None
+        vector = model.encode([text], convert_to_numpy=True)[0].astype(np.float32)
         vector = np.asarray([vector], dtype=np.float32)
         faiss.normalize_L2(vector)
         faiss_id = INDEX.ntotal
@@ -144,6 +152,80 @@ def get_bridge_problem(target_id: str) -> Tuple[Optional[str], Optional[str]]:
 
 def _cosine_from_faiss(score: float) -> float:
     return max(0.0, min(1.0, float(score)))
+
+
+def tag_difficulty_fallback(
+    target_problem_id: str,
+    missing_concepts: Iterable[str],
+    solved_set: Set[str],
+    top_k: int,
+) -> List[dict]:
+    connection = db.connect()
+    try:
+        target = connection.execute(
+            "SELECT * FROM problems WHERE problem_id = ?",
+            (target_problem_id,),
+        ).fetchone()
+        rows = connection.execute(
+            "SELECT * FROM problems WHERE rating IS NOT NULL"
+        ).fetchall()
+    finally:
+        connection.close()
+
+    target_rating = target["rating"] if target else None
+    missing = {str(tag).lower() for tag in missing_concepts}
+    ranked = []
+    for candidate in rows:
+        candidate_id = candidate["problem_id"]
+        if candidate_id == target_problem_id or candidate_id in solved_set:
+            continue
+        try:
+            tags = {
+                str(tag).lower()
+                for tag in json.loads(candidate["tags_json"] or "[]")
+            }
+        except json.JSONDecodeError:
+            tags = set()
+        concept_score = (
+            len(missing & tags) / max(1, len(missing)) if missing else 0.0
+        )
+        difficulty_score = 0.0
+        if target_rating is not None and candidate["rating"] is not None:
+            delta = int(target_rating) - int(candidate["rating"])
+            if 100 <= delta <= 300:
+                difficulty_score = 1.0
+            elif 50 <= delta < 100 or 300 < delta <= 400:
+                difficulty_score = 0.65
+            elif 0 < delta < 50:
+                difficulty_score = 0.35
+        final_score = 0.65 * concept_score + 0.35 * difficulty_score
+        url = (
+            f"https://codeforces.com/problemset/problem/"
+            f"{candidate['contest_id']}/{candidate['problem_index']}"
+        )
+        ranked.append(
+            {
+                "problem": {
+                    "problem_id": candidate_id,
+                    "url": url,
+                    "rating": candidate["rating"],
+                    "tags": sorted(tags),
+                },
+                "semantic_score": 0.0,
+                "concept_score": round(concept_score, 6),
+                "difficulty_score": round(difficulty_score, 6),
+                "final_score": round(final_score, 6),
+            }
+        )
+    ranked.sort(
+        key=lambda item: (
+            item["final_score"],
+            item["concept_score"],
+            item["difficulty_score"],
+        ),
+        reverse=True,
+    )
+    return ranked[:max(0, top_k)]
 
 
 def find_vector_only_bridge_problems(
@@ -223,10 +305,22 @@ def find_bridge_problems(
     target_row = _problem_row(target_problem_id)
     if target_row is None:
         with FAISS_LOCK:
-            jit_ingest_problem(target_problem_id)
+            ingest_id = jit_ingest_problem(target_problem_id)
+        if ingest_id is None:
+            return tag_difficulty_fallback(
+                target_problem_id,
+                missing_concepts,
+                solved_set,
+                top_k,
+            )
         target_row = _problem_row(target_problem_id)
     if target_row is None:
-        return []
+        return tag_difficulty_fallback(
+            target_problem_id,
+            missing_concepts,
+            solved_set,
+            top_k,
+        )
 
     target_vector = _get_target_vector(target_problem_id)
     if target_vector is None:

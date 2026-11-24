@@ -80,6 +80,35 @@ def test_sqlite_faiss_cardinality_consistency(tmp_path):
     assert index.ntotal == sqlite_count == sqlite_unique == 3
 
 
+def test_indexed_target_vector_uses_faiss_reconstruct_without_model(monkeypatch):
+    class ReconstructIndex:
+        ntotal = 1
+
+        def reconstruct(self, vector_id):
+            assert vector_id == 0
+            return np.ones(384, dtype=np.float32)
+
+    monkeypatch.setattr(vector_engine, "INDEX", ReconstructIndex())
+    monkeypatch.setattr(
+        vector_engine,
+        "_problem_row",
+        lambda problem_id: {"problem_id": problem_id, "faiss_id": 0},
+    )
+    monkeypatch.setattr(
+        vector_engine,
+        "_load_model",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("sentence-transformers must not load for indexed data")
+        ),
+    )
+
+    vector = vector_engine._get_target_vector("1000_A")
+
+    assert vector.shape == (1, 384)
+    assert vector.dtype == np.float32
+    np.testing.assert_array_equal(vector[0], np.ones(384, dtype=np.float32))
+
+
 class FakeIndex:
     ntotal = 4
     dimension = 384
