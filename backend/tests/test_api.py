@@ -136,6 +136,12 @@ def test_extension_manifest_and_files():
     assert manifest["manifest_version"] == 3
     assert manifest["background"]["service_worker"] == "background.js"
     assert manifest["action"]["default_popup"] == "popup.html"
+    assert "css" not in manifest["content_scripts"][0]
+    assert any(
+        "styles.css" in resource["resources"]
+        and "*://codeforces.com/*" in resource["matches"]
+        for resource in manifest["web_accessible_resources"]
+    )
     assert (
         "https://bridgecf-api.onrender.com/*" in manifest["host_permissions"]
         or "https://*/*" in manifest["host_permissions"]
