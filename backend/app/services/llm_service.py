@@ -13,6 +13,34 @@ from ..schemas import StructuredHint
 LOGGER = logging.getLogger("bridgecf.hints")
 
 
+def _extract_json_object(raw_text: str) -> str:
+    text = raw_text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines:
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    if text.startswith("{") and text.endswith("}"):
+        return text
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        return text[start:end + 1]
+    return text
+
+
+def _retry_delay(response, fallback_seconds):
+    retry_after = response.headers.get("Retry-After")
+    if retry_after:
+        try:
+            return float(retry_after)
+        except ValueError:
+            pass
+    return fallback_seconds
+
+
 def detect_spoiler(text: str) -> Optional[str]:
     if "```" in text:
         return "Code fences are not allowed"
@@ -69,13 +97,25 @@ class LLMHintService:
         url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
             f"{self.settings.gemini_model}:generateContent"
-            f"?key={self.settings.gemini_api_key}"
         )
-        response = requests.post(
-            url,
-            json={"contents": [{"parts": [{"text": prompt}]}]},
-            timeout=self.settings.llm_timeout,
-        )
+        for retry in (5.0, 10.0):
+            response = requests.post(
+                url,
+                headers={"x-goog-api-key": self.settings.gemini_api_key},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "responseMimeType": "application/json",
+                        "temperature": 0.2,
+                    },
+                },
+                timeout=self.settings.llm_timeout,
+            )
+            if response.status_code != 429:
+                break
+            time.sleep(_retry_delay(response, retry))
+        else:
+            response.raise_for_status()
         response.raise_for_status()
         parts = response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [])
         return "".join(str(part.get("text", "")) for part in parts)
@@ -83,19 +123,28 @@ class LLMHintService:
     def _call_openai(self, prompt: str) -> str:
         if not self.settings.openai_api_key:
             raise RuntimeError("OpenAI-compatible API key is not configured")
-        response = requests.post(
-            f"{self.settings.openai_base_url.rstrip('/')}/chat/completions",
-            headers={"Authorization": f"Bearer {self.settings.openai_api_key}"},
-            json={
-                "model": self.settings.openai_model,
-                "messages": [
-                    {"role": "system", "content": "Return only the requested JSON hint schema."},
-                    {"role": "user", "content": prompt},
-                ],
-                "response_format": {"type": "json_object"},
-            },
-            timeout=self.settings.llm_timeout,
-        )
+        for retry in (5.0, 10.0):
+            response = requests.post(
+                f"{self.settings.openai_base_url.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {self.settings.openai_api_key}"},
+                json={
+                    "model": self.settings.openai_model,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "Return only the requested JSON hint schema.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    "response_format": {"type": "json_object"},
+                },
+                timeout=self.settings.llm_timeout,
+            )
+            if response.status_code != 429:
+                break
+            time.sleep(_retry_delay(response, retry))
+        else:
+            response.raise_for_status()
         response.raise_for_status()
         return str(response.json()["choices"][0]["message"]["content"])
 
@@ -114,17 +163,24 @@ class LLMHintService:
                 "name": target_metadata.get("name"),
                 "rating": target_metadata.get("rating"),
                 "tags": target_metadata.get("tags", []),
-                "statement_snippet": (target_metadata.get("statement") or "")[:700],
+                "problem_statement": (target_metadata.get("statement") or "")[:2000],
                 "missing_concepts": missing_list,
                 "bridge_problem": {
                     "problem_id": bridge_id,
                     "rating": bridge_rating,
+                    "shared_tags": (
+                        bridge.get("tags", []) if bridge else []
+                    ),
                 },
             },
             ensure_ascii=False,
         )
         prompt = (
-            "Use the context below to produce exactly a StructuredHint JSON object. "
+            "Use only the provided verified problem statement, rating, and tags "
+            "to produce exactly a StructuredHint JSON object. "
+            "Never invent problem mechanics or unverified bridge details. "
+            "For bridge_rationale, reference only the bridge problem ID, rating, "
+            "and shared algorithmic tags shown in context. "
             "Never provide code, an accepted solution, or a complete answer.\n"
             f"Context: {metadata_text}\n"
             "Required keys: concept_tag, conceptual_nudge, strategy_hint, "
@@ -144,7 +200,7 @@ class LLMHintService:
                 else:
                     break
 
-                payload = json.loads(raw)
+                payload = json.loads(_extract_json_object(raw))
                 hint = StructuredHint.model_validate(payload)
                 spoiler_error = next(
                     (

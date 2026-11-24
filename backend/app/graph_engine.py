@@ -1,5 +1,6 @@
 import ctypes
 import logging
+import time
 from pathlib import Path
 from typing import Dict, Iterable, List, Set
 
@@ -15,6 +16,8 @@ PROBLEM_IDS: Dict[str, int] = {}
 CONCEPT_NAMES: Dict[int, str] = {}
 
 engine_path = Path(__file__).resolve().parents[1] / "engine.so"
+USER_STATUS_CACHE: Dict[str, tuple[float, List[dict]]] = {}
+USER_STATUS_TTL_SECONDS = 300.0
 
 
 def _load_native_engine() -> bool:
@@ -113,6 +116,19 @@ def _initialize_dynamic_graph() -> None:
 
 
 def get_user_solved_problems(handle: str) -> List[str]:
+    records = get_user_solved_records(handle)
+    return sorted(
+        record["problem_id"]
+        for record in records
+    )
+
+
+def get_user_solved_records(handle: str) -> List[dict]:
+    now = time.monotonic()
+    cached = USER_STATUS_CACHE.get(handle)
+    if cached and now - cached[0] < USER_STATUS_TTL_SECONDS:
+        return cached[1]
+
     url = "https://codeforces.com/api/user.status"
     try:
         response = requests.get(url, params={"handle": handle}, timeout=10)
@@ -120,7 +136,7 @@ def get_user_solved_problems(handle: str) -> List[str]:
         data = response.json()
         if data.get("status") != "OK":
             return []
-        solved: Set[str] = set()
+        solved: Dict[str, dict] = {}
         for submission in data.get("result", []):
             if submission.get("verdict") != "OK":
                 continue
@@ -128,10 +144,18 @@ def get_user_solved_problems(handle: str) -> List[str]:
             contest_id = problem.get("contestId")
             problem_index = problem.get("index")
             if contest_id is not None and problem_index:
-                solved.add(f"{contest_id}_{problem_index}")
-        return sorted(solved)
+                problem_id = f"{contest_id}_{problem_index}"
+                solved[problem_id] = {
+                    "problem_id": problem_id,
+                    "rating": problem.get("rating"),
+                    "tags": [str(tag) for tag in problem.get("tags", [])],
+                }
+        records = list(solved.values())
+        USER_STATUS_CACHE[handle] = (now, records)
+        return records
     except (requests.RequestException, ValueError) as exc:
         LOGGER.warning("Codeforces user history unavailable for %s: %s", handle, exc)
+        USER_STATUS_CACHE[handle] = (now, [])
         return []
 
 
@@ -199,11 +223,48 @@ def _python_bfs(solved_problem_ids: Iterable[str], target_problem_id: str) -> Li
 
 def find_missing_concepts(handle: str, target_str: str) -> List[str]:
     solved_strings = get_user_solved_problems(handle)
+    return find_missing_concepts_native(solved_strings, target_str)
+
+
+def rating_aware_mastered_tags(
+    solved_records: Iterable[dict],
+    target_rating: int | None,
+) -> Set[str]:
+    if target_rating is None:
+        return set()
+    threshold = target_rating - 300
+    counts: Dict[str, int] = {}
+    for record in solved_records:
+        rating = record.get("rating")
+        if rating is None:
+            continue
+        try:
+            rating = int(rating)
+        except (TypeError, ValueError):
+            continue
+        if rating < threshold:
+            continue
+        for tag in record.get("tags", []):
+            tag = str(tag).lower()
+            counts[tag] = counts.get(tag, 0) + 1
+    return {
+        tag
+        for tag, count in counts.items()
+        if count >= 3
+    }
+
+
+def find_missing_concepts_native(
+    solved_strings: Iterable[str],
+    target_str: str,
+) -> List[str]:
+    """Execute only the C++/Python DAG traversal, with no network I/O."""
     if engine is None:
         return _python_bfs(solved_strings, target_str)
     if target_str not in PROBLEM_IDS:
         return ["Graph Not Mapped For This Problem Yet"]
 
+    solved_strings = list(solved_strings)
     solved_ids = [PROBLEM_IDS[problem] for problem in solved_strings if problem in PROBLEM_IDS]
     if len(solved_ids) == 0:
         solved_array = (ctypes.c_int * 1)(-1)
@@ -225,6 +286,65 @@ def find_missing_concepts(handle: str, target_str: str) -> List[str]:
         return _python_bfs(solved_strings, target_str)
 
     result: List[str] = []
+    for i in range(count):
+        concept = CONCEPT_NAMES.get(out[i])
+        if concept is not None:
+            result.append(concept)
+    return result
+
+
+def find_missing_concepts_rating_aware(
+    solved_records: Iterable[dict],
+    target_str: str,
+) -> List[str]:
+    if engine is None:
+        return _python_bfs(
+            [record["problem_id"] for record in solved_records],
+            target_str,
+        )
+    if target_str not in PROBLEM_IDS:
+        return ["Graph Not Mapped For This Problem Yet"]
+
+    connection = db.connect()
+    try:
+        row = connection.execute(
+            "SELECT rating, tags_json FROM problems WHERE problem_id = ?",
+            (target_str,),
+        ).fetchone()
+    finally:
+        connection.close()
+    if row is None:
+        return ["Graph Not Mapped For This Problem Yet"]
+
+    target_rating = row["rating"]
+    mastered_tags = rating_aware_mastered_tags(solved_records, target_rating)
+    solved_ids = [
+        CONCEPT_IDS[tag]
+        for tag in mastered_tags
+        if tag in CONCEPT_IDS
+    ]
+    if not solved_ids:
+        solved_array = (ctypes.c_int * 1)(-1)
+        solved_count = 0
+    else:
+        solved_array = (ctypes.c_int * len(solved_ids))(*solved_ids)
+        solved_count = len(solved_ids)
+
+    out = (ctypes.c_int * 5)()
+    count = engine.find_bottlenecks(
+        solved_array,
+        solved_count,
+        PROBLEM_IDS[target_str],
+        out,
+        5,
+    )
+    if count < 0:
+        return _python_bfs(
+            [record["problem_id"] for record in solved_records],
+            target_str,
+        )
+
+    result = []
     for i in range(count):
         concept = CONCEPT_NAMES.get(out[i])
         if concept is not None:

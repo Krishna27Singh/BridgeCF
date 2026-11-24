@@ -181,7 +181,7 @@ def run_offline(dataset):
     }
 
 
-def run_live(dataset):
+def run_live(dataset, llm_sample=15, llm_delay=4.5):
     from app import db, graph_engine, vector_engine
     from app.config import get_settings
     from app.services.llm_service import LLMHintService, detect_spoiler
@@ -190,6 +190,12 @@ def run_live(dataset):
     graph_engine._initialize_dynamic_graph()
     vector_engine.load_database()
     llm = LLMHintService(get_settings())
+    live_provider = get_settings().llm_provider
+    report_llm_sample = len(dataset) if llm_sample == 0 else min(llm_sample, len(dataset))
+    report_live_metadata = {
+        "provider": live_provider,
+        "llm_sample": report_llm_sample,
+    }
 
     vector_rows = []
     hybrid_rows = []
@@ -207,10 +213,21 @@ def run_live(dataset):
     if problem_count == 0:
         raise RuntimeError("Live evaluation requires an ingested SQLite knowledge base")
 
+    live_llm_cases = dataset if llm_sample == 0 else dataset[:llm_sample]
+    live_llm_problem_ids = {
+        case["target_problem_id"] for case in live_llm_cases
+    }
+    live_llm_call_count = 0
+    network_start_ns = time.perf_counter_ns()
+    solved_strings = graph_engine.get_user_solved_problems("tourist")
+    network_fetch_latency_ms = ns_to_ms(
+        time.perf_counter_ns() - network_start_ns
+    )
+
     for case in dataset:
         graph_start_ns = time.perf_counter_ns()
-        missing = graph_engine.find_missing_concepts(
-            "tourist",
+        missing = graph_engine.find_missing_concepts_native(
+            solved_strings,
             case["target_problem_id"],
         )
         if not missing:
@@ -224,16 +241,16 @@ def run_live(dataset):
             set(),
             top_k=5,
         )
+        vector_rankings = vector_engine.find_vector_only_bridge_problems(
+            case["target_problem_id"],
+            set(),
+            top_k=5,
+        )
         retrieval_latencies.append(
             ns_to_ms(time.perf_counter_ns() - retrieval_start_ns)
         )
 
         hybrid_tags = [set(item["problem"].get("tags", [])) for item in rankings]
-        vector_rankings = sorted(
-            rankings,
-            key=lambda item: item["semantic_score"],
-            reverse=True,
-        )
         vector_tags = [set(item["problem"].get("tags", [])) for item in vector_rankings]
         tags = hybrid_tags
         rr = next(
@@ -284,28 +301,36 @@ def run_live(dataset):
             "tags": case["target_tags"],
             "statement": "",
         }
-        try:
-            hint, _provider, _fallback = llm.generate(
-                case["target_problem_id"],
-                missing,
-                rankings[0]["problem"] if rankings else None,
-                metadata,
-            )
-            values = hint.model_dump().values()
-            schema_passes.append(1.0)
-            spoiler_passes.append(
-                0.0 if any(detect_spoiler(str(value)) for value in values) else 1.0
-            )
-            concept_alignment.append(
-                1.0
-                if hint.concept_tag.lower()
-                in {tag.lower() for tag in missing}
-                else 0.0
-            )
-        except Exception:
-            schema_passes.append(0.0)
-            spoiler_passes.append(0.0)
-            concept_alignment.append(0.0)
+        if case["target_problem_id"] in live_llm_problem_ids:
+            try:
+                hint, _actual_provider, _fallback = llm.generate(
+                    case["target_problem_id"],
+                    missing,
+                    rankings[0]["problem"] if rankings else None,
+                    metadata,
+                )
+                values = hint.model_dump().values()
+                schema_passes.append(1.0)
+                spoiler_passes.append(
+                    0.0
+                    if any(detect_spoiler(str(value)) for value in values)
+                    else 1.0
+                )
+                concept_alignment.append(
+                    1.0
+                    if hint.concept_tag.lower()
+                    in {tag.lower() for tag in missing}
+                    else 0.0
+                )
+            except Exception:
+                schema_passes.append(0.0)
+                spoiler_passes.append(0.0)
+                concept_alignment.append(0.0)
+            live_llm_call_count += 1
+            if live_llm_call_count < len(live_llm_cases) and llm_delay > 0:
+                time.sleep(llm_delay)
+        else:
+            continue
 
     return {
         "vector_only": aggregate(vector_rows),
@@ -314,22 +339,34 @@ def run_live(dataset):
         "graph_bfs_p95_ms": percentile(graph_latencies, 95),
         "hybrid_retrieval_p50_ms": percentile(retrieval_latencies, 50),
         "hybrid_retrieval_p95_ms": percentile(retrieval_latencies, 95),
+        "network_fetch_ms": network_fetch_latency_ms,
         "llm_guardrails": {
             "json_schema_pass_rate": statistics.mean(schema_passes),
             "anti_spoiler_pass_rate": statistics.mean(spoiler_passes),
             "concept_alignment_rate": statistics.mean(concept_alignment),
         },
+        "live_metadata": report_live_metadata,
     }
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=["offline", "live"], required=True)
+    parser.add_argument("--llm-sample", type=int, default=15)
+    parser.add_argument("--llm-delay", type=float, default=4.5)
     args = parser.parse_args()
+    if args.llm_sample < 0:
+        parser.error("--llm-sample must be >= 0")
+    if args.llm_delay < 0:
+        parser.error("--llm-delay must be >= 0")
     with (EVAL_DIR / "dataset_50.json").open() as handle:
         dataset = json.load(handle)
 
-    report = run_offline(dataset) if args.mode == "offline" else run_live(dataset)
+    report = (
+        run_offline(dataset)
+        if args.mode == "offline"
+        else run_live(dataset, args.llm_sample, args.llm_delay)
+    )
 
     print("| Metric | Vector-Only | BridgeCF Hybrid |")
     print("|---|---:|---:|")
@@ -353,6 +390,11 @@ def main():
         f"{format_latency(report['hybrid_retrieval_p50_ms'])}/"
         f"{format_latency(report['hybrid_retrieval_p95_ms'])} |"
     )
+    if "network_fetch_ms" in report:
+        print(
+            f"| Codeforces Network Fetch ms | - | "
+            f"{format_latency(report['network_fetch_ms'])} |"
+        )
     print("| LLM/Guardrail Metric | Vector-Only | BridgeCF Hybrid |")
     for name, value in report["llm_guardrails"].items():
         print(f"| {name} | - | {value:.3f} |")
@@ -377,6 +419,10 @@ def main():
     summary_lines.extend(
         [
             "",
+            "## Live LLM Configuration",
+            f"- Provider: `{report.get('live_metadata', {}).get('provider', 'offline')}`",
+            f"- LLM sample: `{report.get('live_metadata', {}).get('llm_sample', 'all 50')}`",
+            "",
             "## Latencies",
             f"- Graph BFS p50/p95 ms: "
             f"{format_latency(report['graph_bfs_p50_ms'])}/"
@@ -384,6 +430,15 @@ def main():
             f"- Hybrid retrieval p50/p95 ms: "
             f"{format_latency(report['hybrid_retrieval_p50_ms'])}/"
             f"{format_latency(report['hybrid_retrieval_p95_ms'])}",
+        ]
+    )
+    if "network_fetch_ms" in report:
+        summary_lines.append(
+            f"- Codeforces network fetch ms: "
+            f"{format_latency(report['network_fetch_ms'])}"
+        )
+    summary_lines.extend(
+        [
             "",
             "## LLM / Guardrails",
         ]

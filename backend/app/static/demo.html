@@ -11,6 +11,7 @@
       form { display: grid; gap: 1rem; background: #1e293b; padding: 1.5rem; border-radius: 12px; }
       label { display: grid; gap: .4rem; font-weight: 600; }
       input { padding: .75rem; border: 1px solid #475569; border-radius: 8px; background: #0f172a; color: white; }
+      textarea { padding: .75rem; border: 1px solid #475569; border-radius: 8px; background: #0f172a; color: white; resize: vertical; }
       button { padding: .75rem 1rem; border: 0; border-radius: 8px; background: #06b6d4; color: #082f49; font-weight: 700; cursor: pointer; }
       pre { min-height: 6rem; padding: 1rem; border-radius: 8px; background: #020617; white-space: pre-wrap; }
       .grid { display: grid; gap: 1rem; margin-top: 1rem; }
@@ -29,6 +30,9 @@
       <form id="hint-form">
         <label>Problem ID <input id="problem" name="problem" value="1890_A" required /></label>
         <label>Codeforces handle <input id="handle" name="handle" value="tourist" /></label>
+        <label>Problem Statement (optional — auto-fetched if blank)
+          <textarea id="statement" rows="7" placeholder="Paste the problem statement, or leave blank for auto-fetch"></textarea>
+        </label>
         <button type="submit">Generate hint</button>
       </form>
       <div id="health">Ready status: checking...</div>
@@ -64,7 +68,8 @@
             body: JSON.stringify({
               problem_id: document.getElementById("problem").value,
               user_handle: document.getElementById("handle").value,
-              max_bridges: 3
+              max_bridges: 3,
+              problem_statement: document.getElementById("statement").value.trim() || null
             })
           });
           const data = await response.json();
@@ -95,7 +100,7 @@
               <button type="button" onclick="this.nextElementSibling.classList.toggle('hidden')">Why This Bridge Problem</button>
               <p class="hidden">${hint.bridge_rationale || ""}</p>
             </div>
-            <div class="card">graph ${timing.graph_ms} ms · retrieval ${timing.retrieval_ms} ms ·
+            <div class="card">graph ${timing.graph_ms} ms · CF fetch ${timing.cf_fetch_ms} ms · retrieval ${timing.retrieval_ms} ms ·
               llm ${timing.llm_ms} ms · total ${timing.total_ms} ms ·
               provider ${data.provider}${data.fallback_used ? " (fallback)" : ""}</div>`;
           refreshHealth();
