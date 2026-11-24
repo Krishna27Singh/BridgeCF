@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0](https://github.com/Krishna27Singh/BridgeCF/compare/v0.4.0...v0.5.0) (2026-11-24)
+
+
+### Features
+
+* **oss:** restyle /demo playground and add open-source community doc… ([e99c8fe](https://github.com/Krishna27Singh/BridgeCF/commit/e99c8fef6c90a653887f35399a436b52af1a8510))
+* **oss:** restyle /demo playground and add open-source community docs and roadmap ([d86e4a4](https://github.com/Krishna27Singh/BridgeCF/commit/d86e4a4191b6949ab050636367dda0fa09e0b0fe))
+
 ## [0.4.0](https://github.com/Krishna27Singh/BridgeCF/compare/v0.3.0...v0.4.0) (2026-11-24)
 
 
