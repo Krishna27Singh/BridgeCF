@@ -7,6 +7,8 @@
 
 BridgeCF diagnoses why a competitive programmer is stuck on a Codeforces problem, retrieves unsolved stepping-stone ("bridge") problems calibrated to their skill gap, and delivers progressive 3-stage Socratic hints without spoiling the solution.
 
+[**Live Demo: bridgecf-api.onrender.com/demo**](https://bridgecf-api.onrender.com/demo)
+
 Instead of acting as a generic LLM wrapper, BridgeCF combines a **C++17 concept-prerequisite DAG engine (`ctypes`)**, **rating-aware user mastery over live Codeforces history**, a **SQLite + 384-dim FAISS hybrid ranker across 11,541 Codeforces problems**, and a **provider-agnostic structured RAG pipeline** with programmatic anti-spoiler guardrails.
 
 ---
@@ -201,13 +203,14 @@ Verify readiness at `http://127.0.0.1:8000/ready` and open the interactive playg
 
 ---
 
-## Chrome Extension Setup (Manifest V3)
+## Install Chrome Extension (Free — No Chrome Web Store Required)
 
-1. Download the pre-packaged zip from the [Releases](https://github.com/Krishna27Singh/BridgeCF/releases) page, or use the local `extension/` directory directly.
-2. Open `chrome://extensions/` and enable **Developer mode**.
-3. Click **Load unpacked** and select `extension/`.
-4. Open the extension popup from Chrome's Extensions menu, set your **Codeforces Handle** and **API Base URL** (default `http://127.0.0.1:8000`), click **Test Connection**, and save.
-5. Open any Codeforces problem page (e.g., `https://codeforces.com/problemset/problem/1985/D` or `/contest/1985/problem/D`) and click **Get Adaptive Hint** in the injected sidebar.
+1. Download the latest extension `.zip` from [GitHub Releases](https://github.com/Krishna27Singh/BridgeCF/releases).
+2. Unzip the downloaded file.
+3. Open `chrome://extensions/`, enable **Developer mode**, click **Load unpacked**, and select the unzipped extension folder.
+4. Open the extension popup, enter your Codeforces handle, and click **Save**. The live Render API is selected by default; developers can change the editable API Base URL to `http://127.0.0.1:8000` for local development.
+
+Open a Codeforces problem page (for example, `https://codeforces.com/problemset/problem/1985/D`) to use the hint panel. Render's free tier may take approximately **30–60 seconds** to wake on the first request after 15 minutes of inactivity.
 
 ---
 
